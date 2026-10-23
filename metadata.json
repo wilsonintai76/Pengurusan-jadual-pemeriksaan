@@ -1,0 +1,6 @@
+{
+  "name": "Portal Pengurusan Aset Alih & e-JAS POLIKU",
+  "description": "Portal Pengurusan dan Perancangan Pemeriksaan Aset Alih Kerajaan (1PP AM 2.4), Sistem e-JAS, dan Kompilasi Pra-JKPAK Politeknik Kuching Sarawak.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
