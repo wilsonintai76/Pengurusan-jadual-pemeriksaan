@@ -7,7 +7,6 @@ import {
   CalendarCheck, 
   FileSignature, 
   BookOpen, 
-  Download, 
   Users, 
   ShieldCheck, 
   RefreshCw, 
@@ -16,7 +15,8 @@ import {
   Database,
   Crosshair,
   Plus,
-  SlidersHorizontal
+  SlidersHorizontal,
+  MapPin
 } from 'lucide-react';
 import { UserSession } from '@/lib/types';
 
@@ -67,10 +67,24 @@ export default function SidebarNav({
     },
     {
       id: 'ejas',
-      label: 'Sistem e-JAS',
+      label: 'Jadual Pemeriksaan',
       icon: CalendarCheck,
       badge: null,
-      description: 'Jadual Pemeriksaan',
+      description: 'Pemeriksaan 100%',
+    },
+    {
+      id: 'lokasi',
+      label: 'Direktori Lokasi',
+      icon: MapPin,
+      badge: null,
+      description: 'Makmal & Ruang Aset',
+    },
+    {
+      id: 'jabatan',
+      label: 'Direktori Jabatan',
+      icon: Building2,
+      badge: null,
+      description: '12 Jabatan & UAP',
     },
     {
       id: 'praJkpak',
@@ -88,18 +102,12 @@ export default function SidebarNav({
       description: 'Panduan 1PP AM 2.4',
     },
     {
-      id: 'borang',
-      label: 'Borang KEW.PA',
-      icon: Download,
-      badge: null,
-      description: 'Muat Turun Format',
-    },
-    {
       id: 'direktori',
-      label: 'Direktori Silang',
+      label: 'Direktori Pegawai',
       icon: Users,
-      badge: null,
-      description: 'Gandingan ⇄ Rasmi',
+      badge: '6 Peranan',
+      badgeColor: 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/30',
+      description: 'Pengguna & Peranan',
     },
     {
       id: 'audit',
@@ -107,6 +115,13 @@ export default function SidebarNav({
       icon: ShieldCheck,
       badge: null,
       description: 'Log Polisi Keselamatan',
+    },
+    {
+      id: 'tetapan',
+      label: 'Tetapan',
+      icon: SlidersHorizontal,
+      badge: null,
+      description: 'Konfigurasi Sistem',
     },
   ];
 

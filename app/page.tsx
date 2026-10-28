@@ -8,8 +8,10 @@ import HomeSection from '@/components/HomeSection';
 import EjasSection from '@/components/EjasSection';
 import PraJkpakSection from '@/components/PraJkpakSection';
 import PekelilingSection from '@/components/PekelilingSection';
-import BorangSection from '@/components/BorangSection';
 import DirektoriSection from '@/components/DirektoriSection';
+import DirektoriLokasiSection from '@/components/DirektoriLokasiSection';
+import DirektoriJabatanSection from '@/components/DirektoriJabatanSection';
+import TetapanSection from '@/components/TetapanSection';
 import AuditLogSection from '@/components/AuditLogSection';
 import PrintArea from '@/components/PrintArea';
 
@@ -17,6 +19,7 @@ import AuthModal from '@/components/modals/AuthModal';
 import ScheduleModal from '@/components/modals/ScheduleModal';
 import ClaimLocationModal from '@/components/modals/ClaimLocationModal';
 import Kewpa11Modal from '@/components/modals/Kewpa11Modal';
+import Kewpa7UploadModal from '@/components/modals/Kewpa7UploadModal';
 import CrossInspectionModal from '@/components/modals/CrossInspectionModal';
 import PbacMatrixModal from '@/components/modals/PbacMatrixModal';
 import UserProfileModal from '@/components/modals/UserProfileModal';
@@ -25,28 +28,41 @@ import {
   InspectionSchedule, 
   UserSession, 
   PbacAuditLog, 
-  LaporanPraJkpak 
+  LaporanPraJkpak,
+  LocationInfo,
+  SystemSettings,
+  Kewpa7Record
 } from '@/lib/types';
 import { 
   INITIAL_SCHEDULES, 
   INITIAL_AUDIT_LOGS, 
-  CROSS_PAIRS 
+  CROSS_PAIRS,
+  INITIAL_USERS,
+  INITIAL_LOCATIONS,
+  DEFAULT_SETTINGS,
+  DEPARTMENTS
 } from '@/lib/initialData';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
 const DEFAULT_USER: UserSession = {
-  email: 'mohd.fadzli@poliku.edu.my',
-  name: 'Ts. Mohd Fadzli (DH44)',
-  dept: 'JTMK',
-  role: 'Penyelaras Aset & Pegawai Pemeriksa',
-  grade: 'DH44',
+  email: 'admin.aset@poliku.edu.my',
+  name: 'En. Wan Ismail Bin Wan Ali (N32)',
+  dept: 'PENTADBIRAN',
+  role: 'Pentadbir Sistem',
+  grade: 'N32',
 };
 
 export default function Page() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(DEFAULT_USER);
+  const [users, setUsers] = useState<UserSession[]>(INITIAL_USERS);
   const [schedules, setSchedules] = useState<InspectionSchedule[]>(INITIAL_SCHEDULES);
   const [auditLogs, setAuditLogs] = useState<PbacAuditLog[]>(INITIAL_AUDIT_LOGS);
+  const [locations, setLocations] = useState<LocationInfo[]>(INITIAL_LOCATIONS);
+  const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
+  const [kewpa7Records, setKewpa7Records] = useState<Kewpa7Record[]>([]);
+  const [locationDeptFilter, setLocationDeptFilter] = useState<string>('');
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  const [showKewpa7Modal, setShowKewpa7Modal] = useState<boolean>(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,6 +84,26 @@ export default function Page() {
         if (savedLogs) {
           setAuditLogs(JSON.parse(savedLogs));
         }
+
+        const savedUsers = localStorage.getItem('ejas_users_data');
+        if (savedUsers) {
+          setUsers(JSON.parse(savedUsers));
+        }
+
+        const savedLocations = localStorage.getItem('ejas_locations_data');
+        if (savedLocations) {
+          setLocations(JSON.parse(savedLocations));
+        }
+
+        const savedSettings = localStorage.getItem('ejas_settings_data');
+        if (savedSettings) {
+          setSettings(JSON.parse(savedSettings));
+        }
+
+        const savedKewpa7 = localStorage.getItem('ejas_kewpa7_records_d1');
+        if (savedKewpa7) {
+          setKewpa7Records(JSON.parse(savedKewpa7));
+        }
       } catch (e) {
         console.error('Error reading localStorage', e);
       }
@@ -77,7 +113,7 @@ export default function Page() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<
-    'home' | 'ejas' | 'praJkpak' | 'pekeliling' | 'borang' | 'direktori' | 'audit'
+    'home' | 'ejas' | 'praJkpak' | 'pekeliling' | 'direktori' | 'audit' | 'lokasi' | 'jabatan' | 'tetapan'
   >('home');
   const [showScheduleModal, setShowScheduleModal] = useState<boolean>(false);
   const [editingSchedule, setEditingSchedule] = useState<InspectionSchedule | null>(null);
@@ -154,6 +190,210 @@ export default function Page() {
     setShowUserProfileModal(false);
     setShowAuthModal(true);
     showToast('Anda telah berjaya log keluar dari Portal Pengurusan Aset POLIKU.', 'info');
+  };
+
+  // User Directory CRUD handlers
+  const handleUpdateUser = (updatedUser: UserSession) => {
+    const updated = users.map((u) => (u.email === updatedUser.email ? updatedUser : u));
+    setUsers(updated);
+    if (currentUser?.email === updatedUser.email) {
+      setCurrentUser(updatedUser);
+      try {
+        localStorage.setItem('ejas_auth_user', JSON.stringify(updatedUser));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    try {
+      localStorage.setItem('ejas_users_data', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`Maklumat pegawai ${updatedUser.name} berjaya dikemaskini.`, 'success');
+  };
+
+  const handleDeleteUser = (userEmail: string) => {
+    const target = users.find((u) => u.email === userEmail);
+    if (!target) return;
+    if (currentUser?.email === userEmail) {
+      showToast('Tidak boleh memadam akaun pegawai yang sedang aktif log masuk.', 'error');
+      return;
+    }
+    const updated = users.filter((u) => u.email !== userEmail);
+    setUsers(updated);
+    try {
+      localStorage.setItem('ejas_users_data', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`Pegawai ${target.name} telah dipadam dari direktori.`, 'info');
+  };
+
+  // Location Directory CRUD handlers
+  const handleAddLocation = (newLoc: LocationInfo) => {
+    const updated = [newLoc, ...locations];
+    setLocations(updated);
+    try {
+      localStorage.setItem('ejas_locations_data', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`Lokasi "${newLoc.nama}" (${newLoc.kodRuang}) berjaya didaftarkan.`, 'success');
+  };
+
+  const handleUpdateLocation = (updatedLoc: LocationInfo) => {
+    const updated = locations.map((loc) => loc.id === updatedLoc.id ? updatedLoc : loc);
+    setLocations(updated);
+    try {
+      localStorage.setItem('ejas_locations_data', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`Maklumat lokasi "${updatedLoc.nama}" telah dikemaskini.`, 'success');
+  };
+
+  const handleDeleteLocation = (id: string) => {
+    const target = locations.find((l) => l.id === id);
+    const updated = locations.filter((l) => l.id !== id);
+    setLocations(updated);
+    try {
+      localStorage.setItem('ejas_locations_data', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`Lokasi "${target?.nama || id}" telah dipadam.`, 'info');
+  };
+
+  // KEW.PA-7 Extraction & Edge D1 Save Handler
+  const handleSaveKewpa7Record = (record: Kewpa7Record, createdLocation?: LocationInfo) => {
+    const updatedRecords = [record, ...kewpa7Records];
+    setKewpa7Records(updatedRecords);
+    try {
+      localStorage.setItem('ejas_kewpa7_records_d1', JSON.stringify(updatedRecords));
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (createdLocation) {
+      const existingLocIdx = locations.findIndex(
+        (l) => l.nama.toLowerCase() === createdLocation.nama.toLowerCase() || l.kodRuang === createdLocation.kodRuang
+      );
+      let updatedLocations = [...locations];
+      if (existingLocIdx >= 0) {
+        updatedLocations[existingLocIdx] = {
+          ...updatedLocations[existingLocIdx],
+          anggaranAset: createdLocation.anggaranAset,
+          penjaga: createdLocation.penjaga,
+        };
+      } else {
+        updatedLocations = [createdLocation, ...locations];
+      }
+      setLocations(updatedLocations);
+      try {
+        localStorage.setItem('ejas_locations_data', JSON.stringify(updatedLocations));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    addAuditLog({
+      userEmail: currentUser?.email || 'ppa@poliku.edu.my',
+      action: 'kewpa7:upload_auto_extract',
+      resourceId: record.id,
+      decision: 'PERMIT',
+      policyId: 'POL_KEWPA7_AUTOMATED_PREFILL',
+      notes: `PPAJ/PPAU berjaya memuat naik & mengekstrak borang KEW.PA-7 bagi ${record.lokasi} (${record.senaraiAset.length} unit aset tersimpan di D1).`,
+    });
+
+    showToast(`Borang KEW.PA-7 (${record.lokasi}) berjaya diekstrak & ${record.senaraiAset.length} unit aset disimpan di Edge D1!`, 'success');
+  };
+
+  // Settings Handlers
+  const handleSaveSettings = (newSettings: SystemSettings) => {
+    setSettings(newSettings);
+    try {
+      localStorage.setItem('ejas_settings_data', JSON.stringify(newSettings));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('Semua tetapan sistem dan pekeliling telah disimpan.', 'success');
+  };
+
+  const handleResetDefaultData = () => {
+    setSchedules(INITIAL_SCHEDULES);
+    setUsers(INITIAL_USERS);
+    setAuditLogs(INITIAL_AUDIT_LOGS);
+    setLocations(INITIAL_LOCATIONS);
+    setSettings(DEFAULT_SETTINGS);
+    setCurrentUser(DEFAULT_USER);
+    try {
+      localStorage.setItem('ejas_schedules_data', JSON.stringify(INITIAL_SCHEDULES));
+      localStorage.setItem('ejas_users_data', JSON.stringify(INITIAL_USERS));
+      localStorage.setItem('ejas_pbac_logs', JSON.stringify(INITIAL_AUDIT_LOGS));
+      localStorage.setItem('ejas_locations_data', JSON.stringify(INITIAL_LOCATIONS));
+      localStorage.setItem('ejas_settings_data', JSON.stringify(DEFAULT_SETTINGS));
+      localStorage.setItem('ejas_auth_user', JSON.stringify(DEFAULT_USER));
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('Pangkalan data telah berjaya diset semula kepada data contoh rasmi POLIKU!', 'success');
+  };
+
+  const handleExportFullBackupJSON = () => {
+    const backupData = {
+      version: '1.0.0',
+      exportDate: new Date().toISOString(),
+      institution: settings.namaInstitusi,
+      schedules,
+      users,
+      locations,
+      auditLogs,
+      settings,
+      departments: DEPARTMENTS,
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `POLIKU_Asset_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Fail sandaran JSON berjaya dimuat turun.', 'success');
+  };
+
+  const handleImportBackupJSON = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+        if (parsed.schedules) {
+          setSchedules(parsed.schedules);
+          localStorage.setItem('ejas_schedules_data', JSON.stringify(parsed.schedules));
+        }
+        if (parsed.users) {
+          setUsers(parsed.users);
+          localStorage.setItem('ejas_users_data', JSON.stringify(parsed.users));
+        }
+        if (parsed.locations) {
+          setLocations(parsed.locations);
+          localStorage.setItem('ejas_locations_data', JSON.stringify(parsed.locations));
+        }
+        if (parsed.auditLogs) {
+          setAuditLogs(parsed.auditLogs);
+          localStorage.setItem('ejas_pbac_logs', JSON.stringify(parsed.auditLogs));
+        }
+        if (parsed.settings) {
+          setSettings(parsed.settings);
+          localStorage.setItem('ejas_settings_data', JSON.stringify(parsed.settings));
+        }
+        showToast('Pangkalan data berjaya dipulihkan daripada fail sandaran!', 'success');
+      } catch (err) {
+        showToast('Ralat: Fail JSON tidak sah atau format tidak disokong.', 'error');
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Schedule CRUD
@@ -463,8 +703,8 @@ export default function Page() {
           }}
         />
 
-        {/* Main Content Area: pb-24 on mobile so it clears the bottom menu cleanly, pb-10 on desktop */}
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-10 no-print space-y-6">
+        {/* Main Content Area: pb-24 on mobile so it clears the bottom menu cleanly, maximized desktop width */}
+        <main className="flex-1 w-full max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 pb-24 lg:pb-10 no-print space-y-6">
           {activeTab === 'home' && (
             <HomeSection
               schedules={schedules}
@@ -529,6 +769,33 @@ export default function Page() {
             />
           )}
 
+          {activeTab === 'lokasi' && (
+            <DirektoriLokasiSection
+              locations={locations}
+              currentUser={currentUser}
+              onAddLocation={handleAddLocation}
+              onUpdateLocation={handleUpdateLocation}
+              onDeleteLocation={handleDeleteLocation}
+              onNavigateToSchedule={(jadualId) => {
+                setActiveTab('ejas');
+              }}
+              onOpenKewpa7Modal={() => setShowKewpa7Modal(true)}
+              initialDeptFilter={locationDeptFilter}
+            />
+          )}
+
+          {activeTab === 'jabatan' && (
+            <DirektoriJabatanSection
+              departments={DEPARTMENTS}
+              schedules={schedules}
+              onSelectDepartmentForLocations={(deptId) => {
+                setLocationDeptFilter(deptId);
+                setActiveTab('lokasi');
+              }}
+              onOpenEjas={() => setActiveTab('ejas')}
+            />
+          )}
+
           {activeTab === 'praJkpak' && (
             <PraJkpakSection
               schedules={schedules}
@@ -539,20 +806,53 @@ export default function Page() {
 
           {activeTab === 'pekeliling' && <PekelilingSection />}
 
-          {activeTab === 'borang' && (
-            <BorangSection onPrintKewpa10={handlePrintKewpa10} />
+          {activeTab === 'direktori' && (
+            <DirektoriSection
+              currentUser={currentUser}
+              users={users}
+              onSwitchUser={(user) => {
+                setCurrentUser(user);
+                try {
+                  localStorage.setItem('ejas_auth_user', JSON.stringify(user));
+                } catch (e) {
+                  console.error(e);
+                }
+                showToast(`Berjaya menukar akaun kepada: ${user.name} (${user.role})`, 'success');
+              }}
+              onAddUser={(newUser) => {
+                const updated = [newUser, ...users];
+                setUsers(updated);
+                try {
+                  localStorage.setItem('ejas_users_data', JSON.stringify(updated));
+                } catch (e) {
+                  console.error(e);
+                }
+                showToast(`Pegawai baru ${newUser.name} berjaya didaftarkan!`, 'success');
+              }}
+              onUpdateUser={handleUpdateUser}
+              onDeleteUser={handleDeleteUser}
+            />
           )}
 
-          {activeTab === 'direktori' && <DirektoriSection />}
-
           {activeTab === 'audit' && <AuditLogSection logs={auditLogs} />}
+
+          {activeTab === 'tetapan' && (
+            <TetapanSection
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+              onResetDefaultData={handleResetDefaultData}
+              onExportFullBackupJSON={handleExportFullBackupJSON}
+              onImportBackupJSON={handleImportBackupJSON}
+              currentUser={currentUser}
+            />
+          )}
         </main>
 
         {/* Official Government Footer */}
         <footer className="bg-white border-t border-slate-200 py-5 mt-auto no-print">
           <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-3">
             <div className="text-left">
-              <strong className="text-slate-800">Portal Pengurusan Aset Alih & e-JAS</strong> &bull; Politeknik Kuching Sarawak
+              <strong className="text-slate-800">Portal Pengurusan Aset Alih & Jadual Pemeriksaan</strong> &bull; Politeknik Kuching Sarawak
               <p className="text-[11px] text-slate-400 mt-0.5">
                 Kementerian Pendidikan Tinggi Malaysia &bull; Pematuhan 1PP Tatacara Pengurusan Aset Alih Kerajaan (AM 2.4)
               </p>
@@ -655,6 +955,15 @@ export default function Page() {
             setActiveKewpaSchedule(null);
           }}
           onSubmit={handleSubmitKewpa11}
+        />
+      )}
+
+      {showKewpa7Modal && (
+        <Kewpa7UploadModal
+          isOpen={showKewpa7Modal}
+          onClose={() => setShowKewpa7Modal(false)}
+          currentUser={currentUser}
+          onSaveKewpa7Record={handleSaveKewpa7Record}
         />
       )}
 

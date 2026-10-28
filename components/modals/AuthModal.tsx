@@ -14,41 +14,57 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
   const [email, setEmail] = useState('mohd.fadzli@poliku.edu.my');
   const [name, setName] = useState('Ts. Mohd Fadzli (DH44)');
   const [dept, setDept] = useState('JTMK');
-  const [role, setRole] = useState('Penyelaras Aset Jabatan');
+  const [role, setRole] = useState('Ketua Jabatan');
   const [errorMsg, setErrorMsg] = useState('');
 
   const quickDemoAccounts = [
     { 
-      title: 'Penyelaras JTMK', 
-      email: 'mohd.fadzli@poliku.edu.my', 
-      name: 'Ts. Mohd Fadzli (DH44)', 
+      title: 'Ketua Jabatan', 
+      email: 'kj.jtmk@poliku.edu.my', 
+      name: 'Dr. Haji Ramli Bin Hashim (DH52)', 
       dept: 'JTMK', 
-      role: 'Penyelaras Aset Jabatan',
-      badge: 'Penyelaras'
+      role: 'Ketua Jabatan',
+      badge: 'KJ'
+    },
+    { 
+      title: 'Ketua Program', 
+      email: 'kp.dsk@poliku.edu.my', 
+      name: 'Pn. Mastura Binti Ahmad (DH48)', 
+      dept: 'JTMK', 
+      role: 'Ketua Program',
+      badge: 'KP'
+    },
+    { 
+      title: 'Penolong Pegawai Aset', 
+      email: 'ppa.jtmk@poliku.edu.my', 
+      name: 'Pn. Siti Rohana Binti Mohd (DH41)', 
+      dept: 'JTMK', 
+      role: 'Penolong Pegawai Aset Jabatan/Unit',
+      badge: 'PPA'
+    },
+    { 
+      title: 'Penyelia Lokasi', 
+      email: 'penyelia.makmal1@poliku.edu.my', 
+      name: 'En. Zulhilmi Bin Ariffin (JA29)', 
+      dept: 'JTMK', 
+      role: 'Penyelia Lokasi',
+      badge: 'Penyelia Ruang'
     },
     { 
       title: 'Pentadbir Sistem', 
-      email: 'wan.ismail@poliku.edu.my', 
-      name: 'En. Wan Ismail (N32)', 
+      email: 'admin.aset@poliku.edu.my', 
+      name: 'En. Wan Ismail Bin Wan Ali (N32)', 
       dept: 'PENTADBIRAN', 
-      role: 'Pentadbir Sistem / Pegawai Aset Pusat',
+      role: 'Pentadbir Sistem',
       badge: 'Super Admin'
     },
     { 
-      title: 'Pemeriksa JKE', 
-      email: 'kevin.lim@poliku.edu.my', 
-      name: 'En. Kevin Lim (DH41)', 
-      dept: 'JKE', 
-      role: 'Pegawai Pemeriksa Aset',
-      badge: 'Pemeriksa'
-    },
-    { 
-      title: 'Ketua Pemeriksa', 
-      email: 'abang.salleh@poliku.edu.my', 
-      name: 'Ts. Abang Salleh (DH44)', 
-      dept: 'JKM', 
-      role: 'Ketua Pegawai Pemeriksa Aset',
-      badge: 'Ketua Pra-JKPAK'
+      title: 'Pegawai Pemeriksa', 
+      email: 'rosnah@poliku.edu.my', 
+      name: 'Pn. Rosnah Binti Kassim (DH44)', 
+      dept: 'JTMK', 
+      role: 'Pegawai Pemeriksa',
+      badge: 'Pemeriksa AM 2.4'
     },
   ];
 
@@ -201,21 +217,12 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
               onChange={(e) => setRole(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white font-medium"
             >
-              <option value="Penyelaras Aset Jabatan">
-                Penyelaras Aset Jabatan / Unit
-              </option>
-              <option value="Pentadbir Sistem / Pegawai Aset Pusat">
-                Pentadbir Sistem (Super Admin / Pegawai Aset Pusat)
-              </option>
-              <option value="Pegawai Pemeriksa Aset">
-                Pegawai Pemeriksa Aset
-              </option>
-              <option value="Ketua Pegawai Pemeriksa Aset">
-                Ketua Pegawai Pemeriksa Aset (Pra-JKPAK)
-              </option>
-              <option value="Penyelaras Aset & Pegawai Pemeriksa">
-                Dwi-Peranan (Penyelaras & Pemeriksa)
-              </option>
+              <option value="Ketua Jabatan">Ketua Jabatan (KJ)</option>
+              <option value="Ketua Program">Ketua Program (KP)</option>
+              <option value="Penolong Pegawai Aset Jabatan/Unit">Penolong Pegawai Aset Jabatan/Unit (PPA)</option>
+              <option value="Penyelia Lokasi">Penyelia Lokasi (Pegawai Penjaga Ruang)</option>
+              <option value="Pentadbir Sistem">Pentadbir Sistem (Super Admin / Pegawai Aset)</option>
+              <option value="Pegawai Pemeriksa">Pegawai Pemeriksa (1PP AM 2.4)</option>
             </select>
           </div>
 

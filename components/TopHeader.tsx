@@ -31,8 +31,16 @@ const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
     subtitle: 'Pusat Pengurusan & Pemeriksaan Aset Alih Kerajaan',
   },
   ejas: {
-    title: 'Sistem e-JAS',
-    subtitle: 'Jadual Pemeriksaan 100% Makmal & Bengkel',
+    title: 'Jadual Pemeriksaan',
+    subtitle: 'Jadual Pemeriksaan 100% Makmal & Bengkel (1PP AM 2.4)',
+  },
+  lokasi: {
+    title: 'Direktori Lokasi',
+    subtitle: 'Senarai Makmal, Bengkel, Bilik Kuliah & Ruang Aset POLIKU',
+  },
+  jabatan: {
+    title: 'Direktori Jabatan',
+    subtitle: 'Profil 12 Jabatan & Matriks Pegawai Penyelaras Aset',
   },
   praJkpak: {
     title: 'Kompilasi Pra-JKPAK',
@@ -42,17 +50,17 @@ const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
     title: 'Pekeliling TPA (AM 2.4)',
     subtitle: 'Tatacara Pengurusan Aset Alih & Integriti Pemeriksaan',
   },
-  borang: {
-    title: 'Borang Rasmi KEW.PA',
-    subtitle: 'Pusat Muat Turun & Templat Standard Perbendaharaan',
-  },
   direktori: {
-    title: 'Direktori Gandingan Silang',
-    subtitle: 'Gandingan Rasmi Timbal Balik (⇄) Sesi 2026',
+    title: 'Direktori Pegawai & 6 Peranan Rasmi',
+    subtitle: 'Ketua Jabatan, KP, Penolong Pegawai Aset, Penyelia Lokasi, Admin & Pemeriksa',
   },
   audit: {
     title: 'Jejak Audit PBAC',
     subtitle: 'Penguatkuasaan Dasar & Integriti Penjaga Ruang',
+  },
+  tetapan: {
+    title: 'Tetapan Sistem',
+    subtitle: 'Konfigurasi Pekeliling 1PP AM 2.4 & Parameter Tadbir Urus',
   },
 };
 
@@ -132,7 +140,7 @@ export default function TopHeader({
       </div>
 
       {/* 2. Desktop Header Bar (>= lg) */}
-      <div className="hidden lg:flex items-center justify-between h-16 px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      <div className="hidden lg:flex items-center justify-between h-16 px-6 lg:px-8 xl:px-10 max-w-[1720px] mx-auto w-full">
         
         {/* Breadcrumb & Section Name */}
         <div className="flex items-center space-x-2 text-xs">
@@ -175,17 +183,7 @@ export default function TopHeader({
             </button>
           )}
 
-          {currentUser ? (
-            <button
-              onClick={onOpenUserProfile}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition flex items-center gap-2 border border-slate-800 shadow-xs"
-            >
-              <div className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-bold text-[10px] flex items-center justify-center font-mono">
-                {currentUser.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="truncate max-w-[130px] text-xs font-medium">{currentUser.name}</span>
-            </button>
-          ) : (
+          {!currentUser && (
             <button
               onClick={onOpenLogin}
               className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition flex items-center gap-1.5 shadow-2xs"

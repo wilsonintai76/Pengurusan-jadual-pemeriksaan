@@ -379,11 +379,12 @@ export default function UserProfileModal({
                     onChange={(e) => setRole(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   >
-                    <option value="Penyelaras Aset Jabatan">Penyelaras Aset Jabatan</option>
-                    <option value="Pegawai Pemeriksa Aset">Pegawai Pemeriksa Aset</option>
-                    <option value="Ketua Pegawai Pemeriksa Aset">Ketua Pegawai Pemeriksa Aset</option>
-                    <option value="Penjaga Ruang / Makmal">Penjaga Ruang / Makmal</option>
-                    <option value="Pentadbir Sistem (Super Admin)">Pentadbir Sistem (Super Admin)</option>
+                    <option value="Ketua Jabatan">Ketua Jabatan (KJ)</option>
+                    <option value="Ketua Program">Ketua Program (KP)</option>
+                    <option value="Penolong Pegawai Aset Jabatan/Unit">Penolong Pegawai Aset Jabatan/Unit (PPA)</option>
+                    <option value="Penyelia Lokasi">Penyelia Lokasi (Pegawai Penjaga Ruang)</option>
+                    <option value="Pentadbir Sistem">Pentadbir Sistem (Super Admin)</option>
+                    <option value="Pegawai Pemeriksa">Pegawai Pemeriksa (1PP AM 2.4)</option>
                   </select>
                 </div>
 

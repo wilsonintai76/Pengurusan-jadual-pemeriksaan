@@ -90,8 +90,8 @@ export default function AuditLogSection({ logs }: AuditLogSectionProps) {
 
       </div>
 
-      {/* Audit Log Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      {/* Audit Log Table - Flat square corners for maximized desktop UI */}
+      <div className="bg-white rounded-none border border-slate-200 shadow-2xs">
         <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
           <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
             Log Penilaian Keputusan PBAC (Audit Trail)

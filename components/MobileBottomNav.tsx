@@ -5,7 +5,6 @@ import {
   Home, 
   CalendarCheck, 
   FileSignature, 
-  Download, 
   Menu, 
   X, 
   BookOpen, 
@@ -15,7 +14,10 @@ import {
   LogOut,
   Crosshair,
   Boxes,
-  UserCheck
+  UserCheck,
+  MapPin,
+  Building2,
+  SlidersHorizontal
 } from 'lucide-react';
 import { UserSession } from '@/lib/types';
 
@@ -149,8 +151,34 @@ export default function MobileBottomNav({
             {/* Secondary Navigation Options */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-1 font-mono">
-                Seksyen & Panduan
+                Direktori & Seksyen
               </span>
+
+              <button
+                onClick={() => handleTabSelect('lokasi')}
+                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                  activeTab === 'lokasi' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-4 h-4 text-amber-600" />
+                  <span>Direktori Lokasi & Makmal</span>
+                </div>
+                <span className="text-[10px] text-slate-400">Ruang Aset</span>
+              </button>
+
+              <button
+                onClick={() => handleTabSelect('jabatan')}
+                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                  activeTab === 'jabatan' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Building2 className="w-4 h-4 text-emerald-600" />
+                  <span>Direktori 12 Jabatan</span>
+                </div>
+                <span className="text-[10px] text-slate-400">1PP AM 2.4</span>
+              </button>
 
               <button
                 onClick={() => handleTabSelect('pekeliling')}
@@ -172,10 +200,10 @@ export default function MobileBottomNav({
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Users className="w-4 h-4 text-teal-600" />
-                  <span>Direktori Gandingan Silang</span>
+                  <Users className="w-4 h-4 text-indigo-600" />
+                  <span>Direktori Pegawai (6 Peranan)</span>
                 </div>
-                <span className="text-[10px] text-teal-700 font-mono">Mod ⇄</span>
+                <span className="text-[10px] text-indigo-700 font-mono font-bold">6 Peranan</span>
               </button>
 
               <button
@@ -189,6 +217,19 @@ export default function MobileBottomNav({
                   <span>Jejak Audit & Polisi PBAC</span>
                 </div>
                 <span className="text-[10px] text-purple-700 font-mono">Enjin Dasar</span>
+              </button>
+
+              <button
+                onClick={() => handleTabSelect('tetapan')}
+                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                  activeTab === 'tetapan' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <SlidersHorizontal className="w-4 h-4 text-slate-700" />
+                  <span>Tetapan Sistem & Sandaran</span>
+                </div>
+                <span className="text-[10px] text-slate-400">Konfigurasi</span>
               </button>
             </div>
 
@@ -225,7 +266,7 @@ export default function MobileBottomNav({
         aria-label="Navigasi Mudah Alih"
         className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-2 py-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] lg:hidden no-print"
       >
-        <div className="max-w-md mx-auto grid grid-cols-5 gap-1 items-center">
+        <div className="max-w-md mx-auto grid grid-cols-4 gap-1 items-center">
           
           {/* 1. Utama */}
           <button
@@ -242,7 +283,7 @@ export default function MobileBottomNav({
             <span className="text-[10px] mt-0.5 tracking-tight">Utama</span>
           </button>
 
-          {/* 2. e-JAS */}
+          {/* 2. Jadual Pemeriksaan */}
           <button
             onClick={() => handleTabSelect('ejas')}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition min-h-[44px] ${
@@ -254,7 +295,7 @@ export default function MobileBottomNav({
             <div className={`p-1 rounded-lg transition ${activeTab === 'ejas' ? 'bg-amber-400 text-slate-950' : ''}`}>
               <CalendarCheck className="w-4 h-4" />
             </div>
-            <span className="text-[10px] mt-0.5 tracking-tight">e-JAS</span>
+            <span className="text-[10px] mt-0.5 tracking-tight">Jadual</span>
           </button>
 
           {/* 3. Pra-JKPAK (with badge) */}
@@ -277,22 +318,7 @@ export default function MobileBottomNav({
             <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-[55px]">Pra-JKPAK</span>
           </button>
 
-          {/* 4. Borang */}
-          <button
-            onClick={() => handleTabSelect('borang')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition min-h-[44px] ${
-              activeTab === 'borang'
-                ? 'text-slate-900 font-bold'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <div className={`p-1 rounded-lg transition ${activeTab === 'borang' ? 'bg-amber-400 text-slate-950' : ''}`}>
-              <Download className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] mt-0.5 tracking-tight">Borang</span>
-          </button>
-
-          {/* 5. Menu Drawer */}
+          {/* 4. Menu Drawer */}
           <button
             onClick={() => setShowDrawer(!showDrawer)}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition min-h-[44px] ${
