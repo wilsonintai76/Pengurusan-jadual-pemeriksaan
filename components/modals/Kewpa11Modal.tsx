@@ -8,9 +8,10 @@ import {
   Info,
   Upload,
 } from 'lucide-react';
-import { InspectionSchedule, JustifikasiMap, LaporanPraJkpak, PecahanStatus } from '@/lib/types';
+import { InspectionSchedule, JustifikasiMap, LaporanPraJkpak, PecahanStatus, ProgresAsetJadual } from '@/lib/types';
 import { dataApi } from '@/lib/dataApi';
 import { formatTarikhMY } from '@/lib/tarikh';
+import StatusPerAsetPanel from './StatusPerAsetPanel';
 import {
   PECAHAN_KOSONG,
   STATUS_ASET,
@@ -53,10 +54,17 @@ export default function Kewpa11Modal({ schedule, readOnly = false, onClose, onSu
   const [uploadName, setUploadName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [progresAset, setProgresAset] = useState<ProgresAsetJadual | null>(null);
 
-  // "Sedang Digunakan" dikira automatik sebagai baki aset.
+  // Status per aset (KEW.PA-7) mengatasi kiraan manual apabila sudah ada tanda.
+  const gunaPerAset = Boolean(progresAset && progresAset.jumlahAset > 0);
+  const belumDitanda = progresAset?.belum ?? 0;
+
+  // "Sedang Digunakan" dikira automatik sebagai baki aset (mod manual).
   const sedangDigunakan = hitungSedangDigunakan(kuantiti, pecahan);
-  const pecahanPenuh: PecahanStatus = { ...pecahan, A: sedangDigunakan };
+  const pecahanPenuh: PecahanStatus = gunaPerAset
+    ? { ...progresAset!.pecahan }
+    : { ...pecahan, A: sedangDigunakan };
   const jumlah = jumlahPecahan(pecahanPenuh);
 
   const setBilangan = (kod: keyof PecahanStatus, nilai: string) => {
@@ -106,6 +114,12 @@ export default function Kewpa11Modal({ schedule, readOnly = false, onClose, onSu
     e.preventDefault();
 
     const ralat: string[] = [...validatePecahanStatus(pecahanPenuh)];
+
+    if (gunaPerAset && belumDitanda > 0) {
+      ralat.push(
+        `Masih ada ${belumDitanda} aset belum ditanda status A–F. Lengkapkan "Status per Aset" dahulu.`
+      );
+    }
 
     if (!docKey) {
       ralat.push('Sila muat naik borang KEW.PA-11 yang telah ditandatangani (PDF) ke Cloudflare R2.');
@@ -350,6 +364,15 @@ export default function Kewpa11Modal({ schedule, readOnly = false, onClose, onSu
             </div>
           )}
 
+          {/* 0. Status per aset (KEW.PA-7) — asas jumlah A–F automatik */}
+          {!readOnly && (
+            <StatusPerAsetPanel
+              scheduleId={schedule.id}
+              kuantiti={kuantiti}
+              onProgres={setProgresAset}
+            />
+          )}
+
           {/* 1. Pecahan status fizikal A–F */}
           <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3">
             <div className="flex flex-wrap justify-between items-center gap-2">
@@ -365,10 +388,22 @@ export default function Kewpa11Modal({ schedule, readOnly = false, onClose, onSu
               </span>
             </div>
 
+            {gunaPerAset && (
+              <p className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] font-medium text-sky-800">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Jumlah A–F dikira automatik daripada <strong>Status per Aset</strong> di atas
+                {belumDitanda > 0 ? ` — ${belumDitanda} aset belum ditanda.` : ' dan lengkap 100%.'}
+              </p>
+            )}
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {STATUS_ASET.map((status) => {
                 const auto = Boolean(status.auto);
-                const nilai = auto ? sedangDigunakan : pecahan[status.kod];
+                const nilai = gunaPerAset
+                  ? pecahanPenuh[status.kod]
+                  : auto
+                    ? sedangDigunakan
+                    : pecahan[status.kod];
                 return (
                   <div
                     key={status.kod}
@@ -380,7 +415,7 @@ export default function Kewpa11Modal({ schedule, readOnly = false, onClose, onSu
                     <input
                       type="number"
                       min="0"
-                      readOnly={auto}
+                      readOnly={auto || gunaPerAset}
                       value={nilai}
                       onChange={(e) => setBilangan(status.kod, e.target.value)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-sm ${

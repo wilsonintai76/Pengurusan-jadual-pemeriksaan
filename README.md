@@ -475,47 +475,31 @@ Pecahan penuh disimpan sebagai JSON dalam `inspection_reports.pecahan_status` / 
 (migrasi `backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
 Pra-JKPAK dipetakan: `baik = A + E`, `rosak = C + D`, `usang = B`, `hilang = F`.
 
-## Senarai Aset Belum Diperiksa (eksport SPA)
+## Status per Aset & Sasaran 100% (KEW.PA-11)
 
-SPA menyediakan eksport **Senarai Aset Belum Diperiksa** bagi setiap folder/jabatan dengan enam lajur:
-`Label` (No. Siri Pendaftaran), `Jenis Aset`, `Pegawai Penempatan`, `Bahagian`, `Lokasi Terkini`
-(nama ruang sahaja — tiada kod lokasi) dan `Status Aset`. Portal menyimpan baris ini per **sesi**
-dan memadankannya kepada `locations`.
+Senarai aset ruang datang daripada **KEW.PA-7** (`assets`). Pemeriksa menanda status **A–F bagi setiap
+aset**, dan jumlah pecahan KEW.PA-11 **dikira automatik** daripada tanda tersebut — tiada aset boleh
+terlepas tanpa disedari dan tiada keperluan memuat naik senarai aset daripada SPA lain.
 
-### Jadual
-
-| Jadual | Kandungan |
+| Perkara | Peraturan |
 |---|---|
-| `uninspected_assets` | satu baris per aset (`UNIQUE(session_id, label)`), `location_id` + `padanan_kaedah` |
-| `uninspected_imports` | sejarah setiap fail yang dimuat naik (bilangan baris, padan, gagal) |
-| `spa_room_alias` | peta kekal nama ruang SPA (dinormalisasi) → `locations.id` |
-
-### Enjin padanan (4 lapis)
-
-1. **LABEL** — `assets.no_siri_pendaftaran` (dinormalisasi) → `assets.location_id`; paling tepat.
-2. **ALIAS** — `spa_room_alias` (dicipta apabila padanan manual disimpan).
-3. **NAMA** — nama lokasi portal yang sama dengan nama ruang SPA.
-4. **NULL** — tiada padanan: baris disimpan dan dipaparkan sebagai *Belum Dipadankan*.
-
-Padanan **MANUAL tidak pernah ditimpa** oleh import seterusnya (UPSERT memeriksa
-`padanan_kaedah = 'MANUAL'` dalam klausa `DO UPDATE`).
+| Sumber senarai aset | `assets` per ruang (daripada muat naik KEW.PA-7 di Direktori Lokasi) |
+| Tanda status | Jadual `inspection_asset_status` — satu baris per aset per sesi (`UNIQUE(session_id, asset_id)`) |
+| Jumlah A–F | Dikira daripada tanda; medan manual diabaikan apabila sudah ada tanda |
+| Sasaran 100% | `GET /api/schedules/:id/assets` memulangkan `jumlahAset`, `selesai`, `belum`, `pecahan` |
+| Simpan KEW.PA-11 | Disekat `400 ASSET_STATUS_INCOMPLETE` selagi ada aset belum ditanda |
+| Progres | `v_schedules_full.asetSelesai` → lajur **Belum Periksa** dalam Direktori Lokasi dan label `94/94 aset` pada butang KEW.PA-11 |
 
 ### Endpoint
 
 | Method | Laluan | Nota |
 |---|---|---|
-| `POST` | `/api/uninspected/import` | body `{ namaFail, baris[] }` (maks 5000 baris); Pentadbir Sistem atau Penolong Pegawai Aset |
-| `GET` | `/api/uninspected/summary` | bilangan per lokasi + status jadual + kumpulan nama ruang belum dipadankan |
-| `GET` | `/api/uninspected` | tapisan `locationId`, `status`, `q`, `belumPadan=1`, `had` (maks 2000) |
-| `PUT` | `/api/uninspected/:id/padankan` | body `{ locationId, simpanAlias? }`; kemas kini seisi ruang yang sama |
-| `GET` | `/api/uninspected/imports` | sejarah 50 import terakhir |
-| `DELETE` | `/api/uninspected/imports/:id` | buang satu batch (Pentadbir Sistem) |
+| `GET` | `/api/schedules/:id/assets` | Senarai aset ruang + status + pecahan (semua pengguna log masuk) |
+| `PUT` | `/api/schedules/:id/assets` | body `{ aset: [{ assetId, status, catatan? }] }`; `status: null` membuang tanda; hanya pemeriksa ditugaskan atau Pentadbir Sistem |
 
-Laluan `GET` memasang `requireAuth` secara **eksplisit** kerana middleware global hanya mengesahkan
-kaedah bukan-GET. Parser klien (XLSX/CSV) dan normalisasi label berada di
-[`lib/senaraiBelumPeriksa.ts`](lib/senaraiBelumPeriksa.ts); padanan pelayan di
-[`backend/src/lib/senaraiBelumPeriksa.ts`](backend/src/lib/senaraiBelumPeriksa.ts) — kedua-duanya diuji.
-
+Logik pengiraan di [`backend/src/lib/statusAsetPeraset.ts`](backend/src/lib/statusAsetPeraset.ts) (diuji);
+panel UI di [`components/modals/StatusPerAsetPanel.tsx`](components/modals/StatusPerAsetPanel.tsx)
+(dipasang dalam modal KEW.PA-11, termasuk butang **Baki → A** untuk menanda aset selebihnya).
 ## Pemisahan Tugas & Notifikasi Luput
 ### Pengesahan dapatan (separation of duties)
 

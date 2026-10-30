@@ -21,6 +21,7 @@ import type {
   TenureNotice,
   UserSession,
   OfficerRoleSummary,
+  ProgresAsetJadual,
 } from './types';
 
 /** Kredensial yang dijana Worker semasa pendaftaran / set semula. */
@@ -407,7 +408,20 @@ export const dataApi = {
     list: async () => {
       const rows = await apiFetch<InspectionSchedule[]>('/api/schedules');
       return rows.map(toSchedule);
-    },    create: async (schedule: Partial<InspectionSchedule>) => {
+    },
+    /** Status A–F setiap aset ruang bagi satu jadual (KEW.PA-11 per aset). */
+    assets: (id: string) =>
+      apiFetch<ProgresAsetJadual>(`/api/schedules/${encodeURIComponent(id)}/assets`),
+    /** Simpan status per aset; `status: null` membuang tanda. */
+    saveAssetStatus: (
+      id: string,
+      aset: Array<{ assetId: string; status: string | null; catatan?: string }>
+    ) =>
+      apiFetch<ProgresAsetJadual>(`/api/schedules/${encodeURIComponent(id)}/assets`, {
+        method: 'PUT',
+        body: JSON.stringify({ aset }),
+      }),
+    create: async (schedule: Partial<InspectionSchedule>) => {
       const row = await apiFetch<InspectionSchedule>('/api/schedules', {
         method: 'POST',
         body: JSON.stringify(schedule),

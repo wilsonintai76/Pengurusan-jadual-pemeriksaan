@@ -185,11 +185,22 @@ export default function App() {
     );
   }, [myAssignments, currentUser?.role]);
 
-  /**
+  /** Bilangan aset belum ditanda status A–F, per lokasi (untuk Direktori Lokasi). */
+  const belumPeriksaPerLokasi = useMemo(() => {
+    const peta: Record<string, number> = {};
+    for (const jadual of schedules) {
+      if (!jadual.locationId) continue;
+      const jumlah = jadual.kuantiti || 0;
+      const selesai = jadual.asetSelesai || 0;
+      peta[jadual.locationId] = Math.max(jumlah - selesai, 0);
+    }
+    return peta;
+  }, [schedules]);
+
+/**
    * Laporan KEW.PA-11 hanya boleh diisi oleh Pegawai Pemeriksa yang ditugaskan
    * (atau Pentadbir Sistem); pengguna lain hanya boleh melihat (baca-sahaja).
-   */
-  const canEditKewpa11 = (schedule: InspectionSchedule) => {
+   */  const canEditKewpa11 = (schedule: InspectionSchedule) => {
     if (isSystemAdmin) return true;
     const emel = String(currentUser?.email ?? '').toLowerCase();
     if (!emel) return false;
@@ -875,6 +886,7 @@ export default function App() {
               onOpenKewpa7Modal={() => setShowKewpa7Modal(true)}
               onShowToast={showToast}
               initialDeptFilter={locationDeptFilter}
+              belumPeriksaPerLokasi={belumPeriksaPerLokasi}
             />
           )}
 

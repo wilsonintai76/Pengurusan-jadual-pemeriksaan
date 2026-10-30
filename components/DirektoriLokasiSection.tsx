@@ -51,6 +51,10 @@ interface DirektoriLokasiSectionProps {
   onOpenKewpa7Modal?: () => void;
   onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   initialDeptFilter?: string;
+  /** Lompat ke halaman Aset Belum Diperiksa (pilihan: tapis kepada satu ruang). */
+  onNavigateToBelumPeriksa?: (locationId?: string) => void;
+  /** Bilangan aset belum ditanda status A–F, mengikut locationId. */
+  belumPeriksaPerLokasi?: Record<string, number>;
 }
 
 export default function DirektoriLokasiSection({
@@ -64,6 +68,8 @@ export default function DirektoriLokasiSection({
   onOpenKewpa7Modal,
   onShowToast,
   initialDeptFilter = '',
+  onNavigateToBelumPeriksa,
+  belumPeriksaPerLokasi = {},
 }: DirektoriLokasiSectionProps) {
   const departments = useDepartments();
   const officers = useOfficers();
@@ -84,6 +90,8 @@ export default function DirektoriLokasiSection({
   const [editingLocation, setEditingLocation] = useState<LocationInfo | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
+  /** Bilangan aset belum diperiksa per lokasi (aset tanpa status A–F). */
+  const belumPeriksaCount = belumPeriksaPerLokasi;
   const [previewGpsLocation, setPreviewGpsLocation] = useState<LocationInfo | null>(null);
 
   // KEW.PA-7 Extraction state inside modal
@@ -743,6 +751,7 @@ export default function DirektoriLokasiSection({
                   <th className="py-3 px-3 min-w-[100px] border-b border-slate-800">Jabatan</th>
                   <th className="py-3 px-4 min-w-[220px] border-b border-slate-800">Penyelia Lokasi</th>
                   <th className="py-3 px-3 min-w-[100px] text-center border-b border-slate-800">Bil. Aset</th>
+                  <th className="py-3 px-3 min-w-[110px] text-center border-b border-slate-800">Belum Periksa</th>
                   <th className="py-3 px-3 min-w-[150px] border-b border-slate-800">Status Pemeriksaan</th>
                   <th className="py-3 px-4 min-w-[150px] text-center border-b border-slate-800">Tindakan</th>
                 </tr>
@@ -750,7 +759,7 @@ export default function DirektoriLokasiSection({
               <tbody className="divide-y divide-slate-200 bg-white">
                 {filteredLocations.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <td colSpan={9} className="py-12 text-center text-slate-400">
                       <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                       <p className="font-semibold text-slate-600 text-sm">Tiada lokasi dijumpai.</p>
                       <p className="text-xs text-slate-400 mt-0.5">Sila semak semula kata kunci atau ubah penapis di atas.</p>
@@ -872,7 +881,27 @@ export default function DirektoriLokasiSection({
                           </span>
                         </td>
 
-                        {/* 8. Inspection Status */}
+                        {/* 8. Belum Diperiksa (daripada eksport SPA) */}
+                        <td className="py-3.5 px-3 text-center">
+                          {(() => {
+                            const bilangan = belumPeriksaCount[loc.id] ?? 0;
+                            if (!bilangan) {
+                              return <span className="font-mono text-xs text-slate-300">—</span>;
+                            }
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToBelumPeriksa?.(loc.id)}
+                                title={`${bilangan} aset belum diperiksa — buka senarai`}
+                                className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 font-mono text-xs font-extrabold text-amber-900 transition hover:bg-amber-100"
+                              >
+                                {bilangan}
+                              </button>
+                            );
+                          })()}
+                        </td>
+
+                        {/* 9. Inspection Status */}
                         <td className="py-3.5 px-3">
                           {isSelesai ? (
                             <div>

@@ -589,10 +589,15 @@ export default function EjasSection({
                           <button
                             onClick={() => onOpenKewpa11Modal(item)}
                             title="Isi Perakuan KEW.PA-11 & Pra-JKPAK"
-                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition flex items-center gap-1 shadow-2xs"
+                            className="flex flex-col items-center gap-0 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-2xs transition hover:bg-amber-600"
                           >
-                            <FileCheck className="w-3.5 h-3.5" />
-                            <span>KEW.PA-11</span>
+                            <span className="flex items-center gap-1">
+                              <FileCheck className="h-3.5 w-3.5" />
+                              <span>KEW.PA-11</span>
+                            </span>
+                            <span className="font-mono text-[9px] font-bold opacity-90">
+                              {item.asetSelesai ?? 0}/{item.kuantiti ?? 0} aset
+                            </span>
                           </button>
 
                           <button

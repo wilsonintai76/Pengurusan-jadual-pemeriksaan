@@ -5,7 +5,6 @@ import { Bindings } from './types';
 import { locationsRoute } from './routes/locations';
 import { schedulesRoute } from './routes/schedules';
 import { kewpa7Route } from './routes/kewpa7';
-import { uninspectedRoute } from './routes/uninspected';
 import { settingsRoute } from './routes/settings';
 import { storageRoute } from './routes/storage';
 import { aiRoute } from './routes/ai';
@@ -113,7 +112,6 @@ const routes = app
   .route('/api/officers', officersRoute)
   .route('/api/audit-logs', auditRoute)
   .route('/api/kewpa7', kewpa7Route)
-  .route('/api/uninspected', uninspectedRoute)
   .route('/api/settings', settingsRoute)
   .route('/api/storage', storageRoute)
   .route('/api/ai', aiRoute);
