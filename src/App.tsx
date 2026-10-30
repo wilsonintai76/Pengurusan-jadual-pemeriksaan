@@ -13,6 +13,7 @@ import TetapanSection from '@/components/TetapanSection';
 import AuditLogSection from '@/components/AuditLogSection';
 import KitaranSection from '@/components/KitaranSection';
 import PrintArea from '@/components/PrintArea';
+import PrintPreviewModal from '@/components/modals/PrintPreviewModal';
 
 import LandingPage from '@/components/LandingPage';
 import ScheduleModal from '@/components/modals/ScheduleModal';
@@ -214,7 +215,7 @@ export default function App() {
   };
 
   // Print state
-  const [printMode, setPrintMode] = useState<'kewpa10' | 'praJkpak'>('kewpa10');
+  const [printPreview, setPrintPreview] = useState<'kewpa10' | 'praJkpak' | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
@@ -631,17 +632,11 @@ export default function App() {
 
   // Print Triggers
   const handlePrintKewpa10 = () => {
-    setPrintMode('kewpa10');
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    setPrintPreview('kewpa10');
   };
 
   const handlePrintWorkingPaper = () => {
-    setPrintMode('praJkpak');
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    setPrintPreview('praJkpak');
   };
 
   // CSV Exports
@@ -1148,7 +1143,19 @@ export default function App() {
       {showPbacModal && <PbacMatrixModal onClose={() => setShowPbacModal(false)} />}
 
       {/* Print View Container */}
-      <PrintArea mode={printMode} schedules={schedules} />
+      {printPreview && (
+        <PrintPreviewModal
+          title={
+            printPreview === 'kewpa10'
+              ? 'Pratonton KEW.PA-10 — Jadual Pemeriksaan Aset Alih Tahunan'
+              : 'Pratonton Kertas Pembentangan Pra-JKPAK'
+          }
+          subtitle="Semak dokumen, kemudian tekan Cetak."
+          onClose={() => setPrintPreview(null)}
+        >
+          <PrintArea mode={printPreview} schedules={schedules} tahun={settings.sesiTahun} />
+        </PrintPreviewModal>
+      )}
 
     </div>
   );

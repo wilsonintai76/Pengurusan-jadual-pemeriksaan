@@ -413,10 +413,11 @@ export default function EjasSection({
 
             <button
               onClick={onPrintKewpa10}
+              title="Pratonton & cetak jadual pemeriksaan (KEW.PA-10)"
               className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition flex items-center gap-1.5 shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Cetak KEW.PA-10</span>
+              <span>Cetak Jadual</span>
             </button>
           </div>
 

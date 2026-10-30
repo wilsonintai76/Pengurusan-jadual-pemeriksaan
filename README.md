@@ -273,6 +273,10 @@ Paparan senarai jadual turut membantu pemeriksa:
 - **CSV Aset** di lajur *Kategori & Kuantiti* — memuat turun senarai aset ruang
   (`Bil, No. Siri Pendaftaran, Keterangan Aset`) daripada `GET /api/locations/:id/assets`, supaya
   pemeriksa boleh memilih aset untuk **Daftar Pemeriksaan** tanpa membuka Direktori Lokasi.
+- **Cetak Jadual** — membuka **pratonton dalam SPA** (bukan tab baharu) bagi dokumen KEW.PA-10
+  (Bil, No. Rujukan, Jabatan & Lokasi, **Siri**, Kategori & Unit, Tarikh Rancangan, Pemeriksa, Status)
+  dengan butang **Cetak**; CSS cetakan menyembunyikan chrome modal supaya dokumen tidak terpotong.
+  Butang *Cetak Kertas Pembentangan* dalam Kompilasi Pra-JKPAK menggunakan pratonton yang sama.
 
 Kekangan yang dikuatkuasakan:
 

@@ -93,6 +93,19 @@
     margin: 0;
     padding: 1.5cm;
     display: block !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* Modal pratonton cetakan: buang skrol/ketinggian supaya dokumen tidak terpotong. */
+  .print-modal-shell,
+  .print-modal-body {
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
   }
   .no-print {
     display: none !important;

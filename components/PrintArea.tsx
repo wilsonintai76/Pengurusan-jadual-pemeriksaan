@@ -5,14 +5,16 @@ import { InspectionSchedule } from '@/lib/types';
 interface PrintAreaProps {
   mode: 'kewpa10' | 'praJkpak';
   schedules: InspectionSchedule[];
+  /** Tahun sesi aktif (lalai tahun semasa). */
+  tahun?: string;
 }
 
-export default function PrintArea({ mode, schedules }: PrintAreaProps) {
-  const currentYear = 2026;
+export default function PrintArea({ mode, schedules, tahun }: PrintAreaProps) {
+  const currentYear = Number(tahun) || new Date().getFullYear();
 
   if (mode === 'kewpa10') {
     return (
-      <div id="printArea" className="hidden font-sans text-black leading-relaxed p-6">
+      <div id="printArea" className="font-sans text-black leading-relaxed p-6 bg-white">
         <div className="text-center border-b-2 border-black pb-3 mb-4">
           <h2 className="text-lg font-bold uppercase tracking-wider m-0">
             POLITEKNIK KUCHING SARAWAK
@@ -31,6 +33,7 @@ export default function PrintArea({ mode, schedules }: PrintAreaProps) {
               <th className="border border-black p-2 text-center w-10">Bil</th>
               <th className="border border-black p-2 text-left">No. Rujukan Jadual</th>
               <th className="border border-black p-2 text-left">Jabatan & Lokasi Ruang</th>
+              <th className="border border-black p-2 text-center w-12">Siri</th>
               <th className="border border-black p-2 text-left">Kategori & Unit</th>
               <th className="border border-black p-2 text-center">Tarikh Rancangan</th>
               <th className="border border-black p-2 text-left">Pegawai Pemeriksa Dilantik</th>
@@ -44,6 +47,9 @@ export default function PrintArea({ mode, schedules }: PrintAreaProps) {
                 <td className="border border-black p-2 font-mono">{s.kod || '-'}</td>
                 <td className="border border-black p-2">
                   <strong>{s.jabatan}</strong> - {s.lokasi}
+                </td>
+                <td className="border border-black p-2 text-center font-mono font-bold">
+                  {s.siri ?? '-'}
                 </td>
                 <td className="border border-black p-2">
                   {s.kategori} ({s.kuantiti} unit)
@@ -91,7 +97,7 @@ export default function PrintArea({ mode, schedules }: PrintAreaProps) {
   const selesai = schedules.filter((s) => s.status === 'Selesai' && s.laporanPraJkpak);
 
   return (
-    <div id="printArea" className="hidden font-sans text-black leading-relaxed p-6">
+    <div id="printArea" className="font-sans text-black leading-relaxed p-6 bg-white">
       <div className="text-center border-b-2 border-black pb-3 mb-4">
         <h2 className="text-lg font-bold uppercase tracking-wider m-0">
           POLITEKNIK KUCHING SARAWAK
