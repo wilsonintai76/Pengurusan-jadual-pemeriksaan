@@ -260,6 +260,14 @@ PPAJ/PPAU hanya memilih **ruang jabatan sendiri** dan **Siri 1/2/3**. Medan lain
 | Pegawai pemeriksa | **Pemeriksa sendiri** (self-assign) | Slot `pemeriksa1_id`/`pemeriksa2_id` kekal `NULL` sehingga `POST /api/schedules/:id/claim` |
 | Kategori aset | Sistem | sentiasa `Semua (Harta Modal & Aset Bernilai Rendah)` |
 
+Paparan senarai jadual turut membantu pemeriksa:
+
+- **GPS lokasi** — koordinat ruang (daripada Direktori Lokasi) dipaparkan di bawah nama penyelia dan
+  boleh diklik untuk membuka Google Maps; "GPS belum ditetapkan" jika ruang tiada koordinat.
+- **CSV Aset** di lajur *Kategori & Kuantiti* — memuat turun senarai aset ruang
+  (`Bil, No. Siri Pendaftaran, Keterangan Aset`) daripada `GET /api/locations/:id/assets`, supaya
+  pemeriksa boleh memilih aset untuk **Daftar Pemeriksaan** tanpa membuka Direktori Lokasi.
+
 Kekangan yang dikuatkuasakan:
 
 - **Satu ruang = satu jadual per sesi** — indeks unik `(session_id, location_id)`; cubaan kedua

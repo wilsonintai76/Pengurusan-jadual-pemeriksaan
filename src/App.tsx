@@ -853,6 +853,7 @@ export default function App() {
               onOpenPbacModal={() => setShowPbacModal(true)}
               onExportCSV={handleExportSchedulesCSV}
               onPrintKewpa10={handlePrintKewpa10}
+              onShowToast={showToast}
             />
           )}
 

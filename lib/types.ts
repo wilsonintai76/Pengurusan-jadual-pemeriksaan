@@ -34,6 +34,11 @@ export interface InspectionSchedule {
   siri?: number;
   /** Kod ruang direktori lokasi (untuk padanan jadual ↔ ruang). */
   kodRuang?: string;
+  /** ID lokasi (untuk semakan aset / CSV KEW.PA-7). */
+  locationId?: string;
+  /** GPS ruang daripada Direktori Lokasi. */
+  latitude?: number;
+  longitude?: number;
   /** ID lokasi yang dipilih semasa pendaftaran jadual. */
   lokasiId?: string;
   jabatan: string;

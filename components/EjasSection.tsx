@@ -18,10 +18,13 @@ import {
   FileCheck,
   Building2,
   CalendarCheck2,
+  MapPin,
   X
 } from 'lucide-react';
 import { InspectionSchedule, UserSession, InspectionStatus } from '@/lib/types';
 import { useCrossPairs } from '@/lib/useReferenceData';
+import { dataApi } from '@/lib/dataApi';
+import { assetCsvFileName, buildAssetCsv, downloadCsv } from '@/lib/assetCsv';
 
 interface EjasSectionProps {
   schedules: InspectionSchedule[];
@@ -35,6 +38,7 @@ interface EjasSectionProps {
   onOpenPbacModal: () => void;
   onExportCSV: () => void;
   onPrintKewpa10: () => void;
+  onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export default function EjasSection({
@@ -49,6 +53,7 @@ export default function EjasSection({
   onOpenPbacModal,
   onExportCSV,
   onPrintKewpa10,
+  onShowToast,
 }: EjasSectionProps) {
   const crossPairs = useCrossPairs();
   const [currentView, setCurrentView] = useState<'table' | 'kanban'>('table');
@@ -57,6 +62,38 @@ export default function EjasSection({
   const [filterStatus, setFilterStatus] = useState('SEMUA');
   const [filterQuarter, setFilterQuarter] = useState('SEMUA');
   const [filterMyTasksOnly, setFilterMyTasksOnly] = useState(false);
+  const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
+
+  /** CSV senarai aset ruang — membantu pemeriksa memilih aset untuk Daftar Pemeriksaan. */
+  const handleDownloadAssetsCsv = async (item: InspectionSchedule) => {
+    if (!item.locationId || downloadingCsvId) return;
+    setDownloadingCsvId(item.id);
+
+    try {
+      const { data } = await dataApi.locations.assets(item.locationId);
+      if (!data.length) {
+        onShowToast?.(
+          `Tiada aset berdaftar bagi ${item.lokasi}. Muat naik KEW.PA-7 di Direktori Lokasi dahulu.`,
+          'info'
+        );
+        return;
+      }
+
+      const csv = buildAssetCsv(
+        data.map((asset, index) => ({
+          bil: index + 1,
+          noSiriPendaftaran: asset.noSiriPendaftaran,
+          keterangan: asset.keterangan,
+        }))
+      );
+      downloadCsv(assetCsvFileName(item.lokasi, item.kodRuang || item.kod), csv);
+      onShowToast?.(`CSV ${data.length} aset bagi ${item.lokasi} dimuat turun.`, 'success');
+    } catch (error) {
+      onShowToast?.(`Gagal memuat turun CSV aset: ${(error as Error).message}`, 'error');
+    } finally {
+      setDownloadingCsvId(null);
+    }
+  };
 
   const myDept = currentUser?.dept || 'JTMK';
   const crossPartner = crossPairs[myDept] || Object.keys(crossPairs)[0] || '';
@@ -463,6 +500,22 @@ export default function EjasSection({
                           <span className="block text-[10px] font-mono text-slate-500">
                             {item.penjagaTel || 'Tiada no. telefon'}
                           </span>
+                          {item.latitude && item.longitude ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${item.latitude},${item.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Buka lokasi GPS dalam peta"
+                              className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-mono text-sky-700 hover:text-sky-900 hover:underline"
+                            >
+                              <MapPin className="w-3 h-3" />
+                              {Number(item.latitude).toFixed(5)}, {Number(item.longitude).toFixed(5)}
+                            </a>
+                          ) : (
+                            <span className="mt-0.5 block text-[10px] text-slate-400">
+                              GPS belum ditetapkan
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -470,8 +523,20 @@ export default function EjasSection({
                         <span className="text-xs text-slate-700 block line-clamp-1">
                           {item.kategori}
                         </span>
-                        <div className="text-[11px] text-slate-500 font-semibold font-mono tabular-nums mt-0.5">
-                          {item.kuantiti} unit aset
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <span className="text-[11px] text-slate-500 font-semibold font-mono tabular-nums">
+                            {item.kuantiti} unit aset
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleDownloadAssetsCsv(item)}
+                            disabled={!item.locationId || downloadingCsvId === item.id}
+                            title="Muat turun senarai aset (CSV) untuk Daftar Pemeriksaan"
+                            className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-teal-800 transition hover:bg-teal-100 disabled:opacity-50"
+                          >
+                            <FileSpreadsheet className="w-3 h-3" />
+                            {downloadingCsvId === item.id ? 'Menyediakan…' : 'CSV Aset'}
+                          </button>
                         </div>
                       </td>
 

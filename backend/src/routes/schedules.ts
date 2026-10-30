@@ -26,6 +26,10 @@ interface ScheduleRow {
   id: string;
   kod: string;
   siri: number | null;
+  kodRuang: string;
+  locationId: string;
+  latitude: number | null;
+  longitude: number | null;
   jabatan: string;
   lokasi: string;
   kodRuang: string;
@@ -61,6 +65,9 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
     kod: row.kod,
     siri: Number(row.siri) || 1,
     kodRuang: row.kodRuang,
+    locationId: row.locationId,
+    latitude: row.latitude === null ? undefined : Number(row.latitude),
+    longitude: row.longitude === null ? undefined : Number(row.longitude),
     jabatan: row.jabatan,
     lokasi: row.lokasi,
     kategori: row.kategori as ScheduleRecord['kategori'],
