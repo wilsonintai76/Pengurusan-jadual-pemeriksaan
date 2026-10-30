@@ -12,6 +12,13 @@ import { hasActiveRole, listAssignmentsForOfficer } from '../lib/roles';
 import { canManageDepartment, canManageLocation, loadManageScope } from '../lib/permissions';
 import { windowUntukSiri } from '../lib/takwimSiri';
 import {
+  jumlahPecahan,
+  mapLegacyCounts,
+  normalizePecahan,
+  validatePecahanStatus,
+  type JustifikasiMap,
+} from '../lib/kewpa11Status';
+import {
   evaluateInspectionEligibility,
   loadSchedulePolicyRow,
   policyForCodes,
@@ -53,8 +60,18 @@ interface ScheduleRow {
   bilRosak: number | null;
   bilUsang: number | null;
   bilHilang: number | null;
+  pecahanStatus: string | null;
+  justifikasiStatus: string | null;
   syorTindakan: string | null;
   tarikhPengesahan: string | null;
+}
+
+function safeJson<T>(value: string): T | undefined {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
 }
 
 function mapSchedule(row: ScheduleRow): ScheduleRecord {
@@ -90,6 +107,8 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
           rosak: Number(row.bilRosak) || 0,
           usang: Number(row.bilUsang) || 0,
           hilang: Number(row.bilHilang) || 0,
+          pecahan: row.pecahanStatus ? safeJson(row.pecahanStatus) : undefined,
+          justifikasi: row.justifikasiStatus ? safeJson(row.justifikasiStatus) : undefined,
           cadangan: row.syorTindakan ?? undefined,
           tarikhHantar: row.tarikhPengesahan ?? undefined,
         }
@@ -248,12 +267,22 @@ export const schedulesRoute = new Hono<AppEnv>()
 
       await c.env.DB.prepare(
         `UPDATE inspection_schedules
-         SET ${column} = ?,
-             status_id = CASE WHEN status_id = 'BELUM_MULA' THEN ? ELSE status_id END,
-             updated_at = datetime('now')
+         SET ${column} = ?, updated_at = datetime('now')
          WHERE id = ?`
       )
-        .bind(auth.id, runningStatusId, id)
+        .bind(auth.id, id)
+        .run();
+
+      // Status bertukar ke "Sedang Dijalankan" hanya apabila KEDUA-DUA slot pemeriksa dituntut.
+      await c.env.DB.prepare(
+        `UPDATE inspection_schedules
+            SET status_id = ?, updated_at = datetime('now')
+          WHERE id = ?
+            AND status_id = 'BELUM_MULA'
+            AND pemeriksa1_id IS NOT NULL
+            AND pemeriksa2_id IS NOT NULL`
+      )
+        .bind(runningStatusId, id)
         .run();
 
       // Segerakkan tuntutan ke kolam kitaran aktif (jika jadual berada dalam kitaran).
@@ -677,7 +706,18 @@ export const schedulesRoute = new Hono<AppEnv>()
       if (body.tarikhTamat !== undefined) set('tarikh_tamat', body.tarikhTamat);
       if (body.catatan !== undefined) set('catatan', body.catatan || null);
       if (body.kewpa11DocKey !== undefined) set('kewpa11_r2_key', body.kewpa11DocKey || null);
-      if (body.status !== undefined) set('status_id', await resolveStatusId(c.env.DB, body.status));
+
+      // KEW.PA-11 yang dimuat naik ke R2 = pemeriksaan selesai (status ditetapkan pelayan).
+      const kewpa11Uploaded = Boolean(body.kewpa11DocKey);
+      if (body.status !== undefined || kewpa11Uploaded) {
+        set(
+          'status_id',
+          await resolveStatusId(
+            c.env.DB,
+            kewpa11Uploaded ? 'Selesai' : body.status
+          )
+        );
+      }
 
       if (body.pemeriksa1 !== undefined || body.pemeriksa1Email !== undefined) {
         const officerId = await ensureOfficerId(
@@ -707,16 +747,33 @@ export const schedulesRoute = new Hono<AppEnv>()
 
       if (body.laporanPraJkpak) {
         const report = body.laporanPraJkpak;
-        const baik = Number(report.baik) || 0;
-        const rosak = Number(report.rosak) || 0;
-        const usang = Number(report.usang) || 0;
-        const hilang = Number(report.hilang) || 0;
+
+        // Pecahan status fizikal A–F (KEW.PA-11) + justifikasi wajib bagi B–F.
+        const pecahan = normalizePecahan(report.pecahan);
+        const justifikasi = (report.justifikasi ?? {}) as JustifikasiMap;
+
+        const ralat = validatePecahanStatus(pecahan, justifikasi);
+        if (ralat.length > 0) {
+          return c.json(
+            {
+              success: false,
+              code: 'INVALID_STATUS_JUSTIFICATION',
+              message: ralat[0],
+              errors: ralat,
+            },
+            400
+          );
+        }
+
+        // Pemetaan warisan untuk kompilasi Pra-JKPAK.
+        const { baik, rosak, usang, hilang } = mapLegacyCounts(pecahan);
 
         await c.env.DB.prepare(
           `INSERT INTO inspection_reports (
             id, schedule_id, kuantiti_diperiksa, bil_elok, bil_rosak, bil_usang, bil_hilang,
-            justifikasi_kerosakan, syor_tindakan, tarikh_pengesahan
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            justifikasi_kerosakan, syor_tindakan, tarikh_pengesahan,
+            pecahan_status, justifikasi_status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(schedule_id) DO UPDATE SET
             kuantiti_diperiksa = excluded.kuantiti_diperiksa,
             bil_elok = excluded.bil_elok,
@@ -725,19 +782,23 @@ export const schedulesRoute = new Hono<AppEnv>()
             bil_hilang = excluded.bil_hilang,
             justifikasi_kerosakan = excluded.justifikasi_kerosakan,
             syor_tindakan = excluded.syor_tindakan,
-            tarikh_pengesahan = excluded.tarikh_pengesahan`
+            tarikh_pengesahan = excluded.tarikh_pengesahan,
+            pecahan_status = excluded.pecahan_status,
+            justifikasi_status = excluded.justifikasi_status`
         )
           .bind(
             `REP-${id}`,
             id,
-            baik + rosak + usang + hilang,
+            jumlahPecahan(pecahan),
             baik,
             rosak,
             usang,
             hilang,
             report.justifikasiTidakDigunakan || report.cadangan || null,
             report.syorTindakanUsang || report.cadangan || null,
-            report.tarikhHantar || null
+            report.tarikhHantar || null,
+            JSON.stringify(pecahan),
+            Object.keys(justifikasi).length > 0 ? JSON.stringify(justifikasi) : null
           )
           .run();
       }

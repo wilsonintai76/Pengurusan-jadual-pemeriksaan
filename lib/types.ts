@@ -10,11 +10,27 @@ export interface Kewpa11Doc {
   url: string;
 }
 
+export type KodStatusAset = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+
+/** Bilangan aset bagi setiap status fizikal KEW.PA-11. */
+export type PecahanStatus = Record<KodStatusAset, number>;
+
+export interface JustifikasiStatus {
+  sebab: string;
+  rujukan?: string;
+}
+
+export type JustifikasiMap = Partial<Record<KodStatusAset, JustifikasiStatus>>;
+
 export interface LaporanPraJkpak {
   baik: number;
   rosak: number;
   usang: number;
   hilang: number;
+  /** Pecahan penuh A–F (A Sedang Digunakan … F Hilang). */
+  pecahan?: PecahanStatus;
+  /** Justifikasi & dokumen sokongan bagi status B–F. */
+  justifikasi?: JustifikasiMap;
   noLaporanKerosakan?: string;
   tarikhAduan?: string;
   noPesananKerajaan?: string;

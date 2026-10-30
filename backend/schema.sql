@@ -763,6 +763,8 @@ SELECT
   r.bil_rosak AS bilRosak,
   r.bil_usang AS bilUsang,
   r.bil_hilang AS bilHilang,
+  r.pecahan_status AS pecahanStatus,
+  r.justifikasi_status AS justifikasiStatus,
   r.syor_tindakan AS syorTindakan,
   r.tarikh_pengesahan AS tarikhPengesahan
 FROM inspection_schedules s

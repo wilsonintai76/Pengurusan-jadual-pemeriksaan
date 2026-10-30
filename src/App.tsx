@@ -572,17 +572,21 @@ export default function App() {
   const handleSubmitKewpa11 = (
     scheduleId: string,
     report: LaporanPraJkpak,
-    driveUrl: string
+    kewpa11DocKey: string
   ) => {
     dataApi.schedules
       .update(scheduleId, {
         status: 'Selesai',
-        kewpa11DocKey: driveUrl,
+        kewpa11DocKey,
         laporanPraJkpak: report,
       })
-      .then((saved) =>
-        setSchedules((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
-      )
+      .then((saved) => {
+        setSchedules((prev) => prev.map((s) => (s.id === saved.id ? saved : s)));
+        showToast(
+          `KEW.PA-11 bagi ${saved.lokasi} disimpan ke Cloudflare R2 — status jadual: ${saved.status}.`,
+          'success'
+        );
+      })
       .catch((error: Error) => showToast(`Gagal menyimpan laporan KEW.PA-11: ${error.message}`, 'error'));
 
     if (report.rosak > 0) {

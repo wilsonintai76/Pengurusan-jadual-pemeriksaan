@@ -257,7 +257,8 @@ PPAJ/PPAU hanya memilih **ruang jabatan sendiri** dan **Siri 1/2/3**. Medan lain
 |---|---|---|
 | Ruang + Siri | PPAJ/PPAU (atau Pentadbir Sistem) | `POST /api/schedules` menerima `{ lokasiId, siri, catatan? }` sahaja |
 | Tarikh mula/tamat | **Penyelia Lokasi** ruang itu (atau pentadbir) | Lalai = bulan siri dalam takwim; `PUT /api/schedules/:id` disekat `403 DATE_FORBIDDEN` bagi peranan lain dan `400 OUT_OF_SIRI_WINDOW` jika tarikh keluar julat siri |
-| Pegawai pemeriksa | **Pemeriksa sendiri** (self-assign) | Slot `pemeriksa1_id`/`pemeriksa2_id` kekal `NULL` sehingga `POST /api/schedules/:id/claim` |
+| Pegawai pemeriksa | **Pemeriksa sendiri** (self-assign) | Slot `pemeriksa1_id`/`pemeriksa2_id` kekal `NULL` sehingga `POST /api/schedules/:id/claim`. Status jadual bertukar ke **Sedang Dijalankan** hanya apabila **kedua-dua** slot dituntut. |
+| KEW.PA-11 | Pemeriksa | Dimuat naik ke **Cloudflare R2** (`POST /api/storage/upload`, `kewpa11_r2_key`); status jadual bertukar ke **Selesai** secara automatik pada pelayan |
 | Kategori aset | Sistem | sentiasa `Semua (Harta Modal & Aset Bernilai Rendah)` |
 
 Paparan senarai jadual turut membantu pemeriksa:
@@ -435,6 +436,24 @@ Backfill `officers.peranan → role_assignments`:
   migrasi dijalankan berulang kali);
 - mengecualikan pegawai pemegang tempat beremel auto (`peg-…@poliku.edu.my`) dan menutup lantikan
   sedia ada milik pegawai tersebut.
+
+### Status fizikal aset A–F (KEW.PA-11)
+
+| Kod | Status | Dokumen sokongan wajib bila > 0 |
+|---|---|---|
+| A | Sedang Digunakan | — |
+| B | Tidak Digunakan | Justifikasi (pilihan pantas: tiada dalam silibus, aset lapuk, melebihi keperluan, ralat perolehan, tidak ekonomik dibaiki) |
+| C | Perlu Pembaikan | Justifikasi + **no. laporan kerosakan** |
+| D | Sedang Diselenggara | Justifikasi + **no. LPO / pesanan kerja** |
+| E | Pinjaman | Justifikasi + **no. borang pinjaman** |
+| F | Hilang | Justifikasi (+ no. laporan polis jika ada) |
+
+Semua status B–F mewajibkan justifikasi. Peraturan disemak **dua lapis**: klien
+([`lib/statusAset.ts`](lib/statusAset.ts)) dan Worker ([`backend/src/lib/kewpa11Status.ts`](backend/src/lib/kewpa11Status.ts))
+yang memulangkan `400 INVALID_STATUS_JUSTIFICATION` bersama senarai ralat. Pecahan penuh disimpan sebagai
+JSON dalam `inspection_reports.pecahan_status` / `justifikasi_status` (migrasi
+`backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
+Pra-JKPAK dipetakan: `baik = A + E`, `rosak = C + D`, `usang = B`, `hilang = F`.
 
 ## Pemisahan Tugas & Notifikasi Luput
 

@@ -522,6 +522,38 @@ export const dataApi = {
       }),
   },
 
+  storage: {
+    /** Muat naik fail ke Cloudflare R2; pulangkan kunci objek (cth. `kewpa11/…`). */
+    upload: async (file: File, category = 'kewpa11') => {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('category', category);
+
+      const response = await fetch(`${API_BASE_URL}/api/storage/upload`, {
+        method: 'POST',
+        headers: { ...authHeaders() },
+        body: form,
+      });
+      const payload: any = await response.json().catch(() => null);
+      if (!response.ok || payload?.success === false) {
+        throw new ApiError(
+          payload?.message || `Muat naik fail gagal (${response.status}).`,
+          response.status,
+          payload?.code
+        );
+      }
+      return (payload?.data ?? payload) as {
+        key: string;
+        fileName: string;
+        size: number;
+        contentType: string;
+        url: string;
+      };
+    },
+    /** Pautan fail R2 (melalui Worker, bukan Google Drive). */
+    fileUrl: (key: string) => `${API_BASE_URL}/api/storage/file/${encodeURIComponent(key)}`,
+  },
+
   settings: {
     get: async (): Promise<SystemSettings> => {
       const data = await apiFetch<Partial<SystemSettings>>('/api/settings');

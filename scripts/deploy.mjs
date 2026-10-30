@@ -94,6 +94,17 @@ if (!frontendOnly) {
         'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-10-30-schedule-siri.sql'
       );
     }
+
+    const reportColumns = run(
+      'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --json --command "PRAGMA table_info(inspection_reports)"',
+      { capture: true }
+    );
+    if (!/"name"\s*:\s*"pecahan_status"/.test(reportColumns)) {
+      console.log('\u25b8 Migrasi: pecahan status fizikal aset A\u2013F (KEW.PA-11)\u2026');
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-10-30-kewpa11-pecahan.sql'
+      );
+    }
     console.log('▶ Migrasi skema D1 (remote)…');
     run(
       'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/schema.sql'
