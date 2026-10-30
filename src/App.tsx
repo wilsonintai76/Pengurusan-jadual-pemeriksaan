@@ -1079,7 +1079,10 @@ export default function App() {
       {showScheduleModal && (
         <ScheduleModal
           schedule={editingSchedule}
+          schedules={schedules}
           defaultDept={currentUser?.dept || 'JTMK'}
+          tahunSesi={settings.sesiTahun}
+          canChooseDept={isSystemAdmin}
           onClose={() => {
             setShowScheduleModal(false);
             setEditingSchedule(null);

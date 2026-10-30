@@ -102,13 +102,15 @@ export default function EjasSection({
     // Status filter
     if (filterStatus !== 'SEMUA' && item.status !== filterStatus) return false;
 
-    // Quarter filter based on tarikhMula
+    // Tapisan sukuan: utamakan Siri jadual (tarikh mungkin belum ditetapkan).
     if (filterQuarter !== 'SEMUA') {
-      const month = new Date(item.tarikhMula).getMonth() + 1;
-      if (filterQuarter === 'Q1' && !(month >= 1 && month <= 3)) return false;
-      if (filterQuarter === 'Q2' && !(month >= 4 && month <= 6)) return false;
-      if (filterQuarter === 'Q3' && !(month >= 7 && month <= 9)) return false;
-      if (filterQuarter === 'Q4' && !(month >= 10 && month <= 12)) return false;
+      const siri = Number(item.siri) || 0;
+      if (!siri) return false;
+      if (filterQuarter === 'Q1' && siri !== 1) return false;
+      if (filterQuarter === 'Q2' && siri !== 2) return false;
+      if (filterQuarter === 'Q3' && siri !== 3) return false;
+      // Hanya tiga siri dijadualkan setahun.
+      if (filterQuarter === 'Q4') return false;
     }
 
     return true;
@@ -268,11 +270,10 @@ export default function EjasSection({
               onChange={(e) => setFilterQuarter(e.target.value)}
               className="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
-              <option value="SEMUA">Semua Suku/Fasa</option>
-              <option value="Q1">Suku 1 (Jan - Mac)</option>
-              <option value="Q2">Suku 2 (Apr - Jun)</option>
-              <option value="Q3">Suku 3 (Jul - Sep)</option>
-              <option value="Q4">Suku 4 (Okt - Dis)</option>
+              <option value="SEMUA">Semua Siri</option>
+              <option value="Q1">Siri 1</option>
+              <option value="Q2">Siri 2</option>
+              <option value="Q3">Siri 3</option>
             </select>
           </div>
 
@@ -467,8 +468,19 @@ export default function EjasSection({
                       </td>
 
                       <td className="py-3.5 px-4 text-xs font-mono">
-                        <div className="text-slate-800 font-medium">{item.tarikhMula}</div>
-                        <div className="text-slate-400 text-[11px]">hingga {item.tarikhTamat}</div>
+                        {item.tarikhMula ? (
+                          <>
+                            <div className="text-slate-800 font-medium">{item.tarikhMula}</div>
+                            <div className="text-slate-400 text-[11px]">hingga {item.tarikhTamat}</div>
+                          </>
+                        ) : (
+                          <span className="text-amber-700 italic text-[11px]">
+                            Belum ditetapkan
+                            <span className="block text-slate-400 not-italic">
+                              Penyelia Lokasi
+                            </span>
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-xs space-y-1">
@@ -595,7 +607,9 @@ export default function EjasSection({
                     </h5>
 
                     <p className="text-[11px] text-slate-500 font-mono">
-                      {item.tarikhMula} - {item.tarikhTamat}
+                      {item.tarikhMula
+                        ? `${item.tarikhMula} - ${item.tarikhTamat}`
+                        : 'Tarikh belum ditetapkan'}
                     </p>
 
                     <div className="pt-1 flex items-center justify-between border-t border-slate-100 text-[11px]">
@@ -647,7 +661,9 @@ export default function EjasSection({
                     </h5>
 
                     <p className="text-[11px] text-slate-500 font-mono">
-                      {item.tarikhMula} - {item.tarikhTamat}
+                      {item.tarikhMula
+                        ? `${item.tarikhMula} - ${item.tarikhTamat}`
+                        : 'Tarikh belum ditetapkan'}
                     </p>
 
                     <div className="pt-1 flex items-center justify-between border-t border-slate-100 text-[11px]">

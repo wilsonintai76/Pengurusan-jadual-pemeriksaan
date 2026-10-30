@@ -5,11 +5,11 @@ import {
   ensureOfficerId,
   ensureSessionId,
   resolveAssetCategoryId,
-  resolveDepartmentId,
   resolveStatusId,
 } from '../lib/db';
 import { getAuthUser, type AppEnv } from '../middleware/auth';
 import { hasActiveRole, listAssignmentsForOfficer } from '../lib/roles';
+import { canManageDepartment, canManageLocation, loadManageScope } from '../lib/permissions';
 import {
   evaluateInspectionEligibility,
   loadSchedulePolicyRow,
@@ -24,6 +24,7 @@ import { evaluateVerification } from '../lib/verification';
 interface ScheduleRow {
   id: string;
   kod: string;
+  siri: number | null;
   jabatan: string;
   lokasi: string;
   kodRuang: string;
@@ -55,6 +56,8 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
   return {
     id: row.id,
     kod: row.kod,
+    siri: Number(row.siri) || 1,
+    kodRuang: row.kodRuang,
     jabatan: row.jabatan,
     lokasi: row.lokasi,
     kategori: row.kategori as ScheduleRecord['kategori'],
@@ -89,16 +92,6 @@ async function findScheduleRow(db: DB, id: string): Promise<ScheduleRow | null> 
     .prepare('SELECT * FROM v_schedules_full WHERE id = ? LIMIT 1')
     .bind(id)
     .first<ScheduleRow>();
-}
-
-async function findLocationId(db: DB, value: string): Promise<string | null> {
-  const row = await db
-    .prepare(
-      'SELECT id FROM locations WHERE id = ? OR kod_ruang = ? OR nama = ? COLLATE NOCASE LIMIT 1'
-    )
-    .bind(value, value, value)
-    .first<{ id: string }>();
-  return row?.id ?? null;
 }
 
 export const schedulesRoute = new Hono<AppEnv>()
@@ -290,117 +283,169 @@ export const schedulesRoute = new Hono<AppEnv>()
   .post('/', async (c) => {
     try {
       const body = await c.req.json();
-
-      if (!body.lokasi || !body.jabatan || !body.tarikhMula || !body.tarikhTamat) {
+      const auth = getAuthUser(c);
+      if (!auth) {
         return c.json(
-          { success: false, message: 'Lokasi, Jabatan dan Tarikh Pemeriksaan wajib diisi' },
+          { success: false, code: 'UNAUTHENTICATED', message: 'Sesi tidak sah. Sila log masuk.' },
+          401
+        );
+      }
+
+      const lokasiRef = String(body.lokasiId ?? body.lokasi ?? '').trim();
+      const siri = Number(body.siri);
+
+      if (!lokasiRef) {
+        return c.json({ success: false, code: 'INVALID_INPUT', message: 'Sila pilih lokasi ruang.' }, 400);
+      }
+      if (!Number.isInteger(siri) || siri < 1 || siri > 3) {
+        return c.json(
+          { success: false, code: 'INVALID_SIRI', message: 'Siri pemeriksaan mesti 1, 2 atau 3.' },
           400
         );
       }
 
-      if (!body.pemeriksa1 || !body.pemeriksa2) {
-        return c.json({ success: false, message: 'Pemeriksa 1 dan Pemeriksa 2 wajib diisi' }, 400);
-      }
+      const location = await c.env.DB.prepare(
+        `SELECT id, department_id AS departmentId, nama
+           FROM locations
+          WHERE id = ? OR nama = ? COLLATE NOCASE OR kod_ruang = ? COLLATE NOCASE
+          LIMIT 1`
+      )
+        .bind(lokasiRef, lokasiRef, lokasiRef)
+        .first<{ id: string; departmentId: string; nama: string }>();
 
-      const departmentId = await resolveDepartmentId(c.env.DB, body.jabatan);
-      if (!departmentId) {
-        return c.json({ success: false, message: `Jabatan '${body.jabatan}' tidak dijumpai` }, 400);
-      }
-
-      const locationId = await findLocationId(c.env.DB, String(body.lokasi));
-      if (!locationId) {
+      if (!location) {
         return c.json(
-          { success: false, message: `Lokasi '${body.lokasi}' tidak dijumpai dalam direktori ruang` },
+          {
+            success: false,
+            code: 'UNKNOWN_LOCATION',
+            message: `Lokasi '${lokasiRef}' tidak dijumpai dalam direktori ruang.`,
+          },
           400
         );
       }
 
-      const pemeriksa1Id = await ensureOfficerId(
-        c.env.DB,
-        { nama: body.pemeriksa1, emel: body.pemeriksa1Email },
-        departmentId
-      );
-      const pemeriksa2Id = await ensureOfficerId(
-        c.env.DB,
-        { nama: body.pemeriksa2, emel: body.pemeriksa2Email },
-        departmentId
-      );
+      // PPAJ/PPAU (dan KJ/KU) hanya boleh menjadualkan ruang jabatan sendiri.
+      const scope = await loadManageScope(c.env.DB, auth.id);
+      if (!canManageDepartment(scope, location.departmentId)) {
+        await recordAudit(c.env.DB, {
+          actorId: auth.id,
+          actorName: auth.emel,
+          actedAsRole: auth.role,
+          action: 'schedule:create',
+          departmentId: location.departmentId,
+          decision: 'DENY',
+          policyId: 'POL_DEPARTMENT_SCOPE',
+          resourceId: location.id,
+          notes: 'Cubaan menjadualkan ruang di luar jabatan/unit sendiri.',
+          reason: 'DEPARTMENT_FORBIDDEN',
+        });
 
-      const sessionId = await ensureSessionId(c.env.DB, String(body.tarikhMula));
-      const assetCategoryId = await resolveAssetCategoryId(c.env.DB, body.kategori);
-      const statusId = await resolveStatusId(c.env.DB, body.status);
-      const createdById = body.createdBy
-        ? await ensureOfficerId(
-            c.env.DB,
-            {
-              emel: String(body.createdBy).includes('@') ? body.createdBy : null,
-              nama: String(body.createdBy).includes('@') ? null : body.createdBy,
-            },
-            departmentId
-          )
-        : null;
-
-      const year = String(body.tarikhMula).slice(0, 4) || String(new Date().getFullYear());
-      const id = body.id || `JAD-${year}-${Date.now().toString(36).toUpperCase()}`;
-
-      const insert = (kod: string) =>
-        c.env.DB.prepare(
-          `INSERT INTO inspection_schedules (
-            id, session_id, kod, location_id, department_id, asset_category_id,
-            tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id, status_id,
-            catatan, created_by_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-          .bind(
-            id,
-            sessionId,
-            kod,
-            locationId,
-            departmentId,
-            assetCategoryId,
-            body.tarikhMula,
-            body.tarikhTamat,
-            pemeriksa1Id,
-            pemeriksa2Id,
-            statusId,
-            body.catatan || null,
-            createdById
-          )
-          .run();
-
-      let kod = body.kod;
-      if (!kod) {
-        const countRow = await c.env.DB.prepare(
-          'SELECT COUNT(*) AS total FROM inspection_schedules WHERE department_id = ? AND session_id = ?'
-        )
-          .bind(departmentId, sessionId)
-          .first<{ total: number }>();
-        kod = `JAD/${departmentId}/${year}/${String((Number(countRow?.total) || 0) + 1).padStart(2, '0')}`;
+        return c.json(
+          {
+            success: false,
+            code: 'DEPARTMENT_FORBIDDEN',
+            message: 'Akses ditolak: anda hanya boleh mendaftar jadual bagi ruang jabatan/unit anda sendiri.',
+          },
+          403
+        );
       }
 
-      try {
-        await insert(kod);
-      } catch (e: any) {
-        if (/UNIQUE/i.test(e.message) && !body.kod) {
-          kod = `JAD/${departmentId}/${year}/${Date.now().toString(36).toUpperCase()}`;
-          await insert(kod);
-        } else {
-          throw e;
-        }
+      const year = new Date().getFullYear();
+      const sessionId = await ensureSessionId(c.env.DB, `${year}-01-01`);
+
+      // Satu ruang = satu jadual per sesi (Siri 1, 2 ATAU 3 sahaja).
+      const existing = await c.env.DB.prepare(
+        `SELECT s.id, s.kod, s.siri
+           FROM inspection_schedules s
+           JOIN inspection_sessions ss ON ss.id = s.session_id
+          WHERE ss.tahun = ? AND s.location_id = ?
+          LIMIT 1`
+      )
+        .bind(year, location.id)
+        .first<{ id: string; kod: string; siri: number }>();
+
+      if (existing) {
+        return c.json(
+          {
+            success: false,
+            code: 'ALREADY_SCHEDULED',
+            message: `Ruang ${location.nama} sudah dijadualkan dalam Siri ${existing.siri} (${existing.kod}). Setiap ruang diperiksa sekali sahaja setiap sesi.`,
+            data: existing,
+          },
+          409
+        );
       }
+
+      const assetCategoryId = await resolveAssetCategoryId(c.env.DB, 'Semua');
+      const statusId = await resolveStatusId(c.env.DB, 'Belum Mula');
+      const id = `JAD-${year}-${Date.now().toString(36).toUpperCase()}`;
+
+      const countRow = await c.env.DB.prepare(
+        'SELECT COUNT(*) AS total FROM inspection_schedules WHERE department_id = ? AND session_id = ?'
+      )
+        .bind(location.departmentId, sessionId)
+        .first<{ total: number }>();
+      const kod = `JAD/${location.departmentId}/${year}/${String(
+        (Number(countRow?.total) || 0) + 1
+      ).padStart(2, '0')}`;
+
+      // Tarikh dan pemeriksa dikosongkan: tarikh ditetapkan Penyelia Lokasi,
+      // pemeriksa menuntut slot sendiri (self-assign).
+      await c.env.DB.prepare(
+        `INSERT INTO inspection_schedules (
+           id, session_id, kod, location_id, department_id, asset_category_id, siri,
+           tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id, status_id,
+           catatan, created_by_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)`
+      )
+        .bind(
+          id,
+          sessionId,
+          kod,
+          location.id,
+          location.departmentId,
+          assetCategoryId,
+          siri,
+          statusId,
+          body.catatan || null,
+          auth.id
+        )
+        .run();
+
+      await recordAudit(c.env.DB, {
+        actorId: auth.id,
+        actorName: auth.emel,
+        actedAsRole: auth.role,
+        action: 'schedule:create',
+        departmentId: location.departmentId,
+        decision: 'PERMIT',
+        policyId: 'POL_INSPECTION_TASK_ASSIGNMENT',
+        resourceId: id,
+        notes: `Jadual ${kod} (Siri ${siri}) bagi ${location.nama} didaftarkan.`,
+      });
 
       const saved = await findScheduleRow(c.env.DB, id);
 
       return c.json(
         {
           success: true,
-          message: 'Jadual pemeriksaan berjaya disimpan di Cloudflare D1',
+          message: `Jadual Siri ${siri} bagi ${location.nama} berjaya didaftarkan.`,
           data: saved ? mapSchedule(saved) : { id, kod },
         },
         201
       );
     } catch (e: any) {
-      return c.json({ success: false, message: e.message }, 500);
+      const duplicate = /UNIQUE/i.test(e.message);
+      return c.json(
+        {
+          success: false,
+          code: duplicate ? 'ALREADY_SCHEDULED' : 'CREATE_FAILED',
+          message: duplicate
+            ? 'Ruang ini sudah mempunyai jadual dalam sesi semasa.'
+            : e.message,
+        },
+        duplicate ? 409 : 500
+      );
     }
   })
 
@@ -420,8 +465,8 @@ export const schedulesRoute = new Hono<AppEnv>()
           id: string;
           department_id: string;
           location_id: string;
-          tarikh_mula: string;
-          tarikh_tamat: string;
+          tarikh_mula: string | null;
+          tarikh_tamat: string | null;
           pemeriksa1_id: string | null;
           pemeriksa2_id: string | null;
         }>();
@@ -432,6 +477,58 @@ export const schedulesRoute = new Hono<AppEnv>()
 
       const auth = getAuthUser(c);
       const isAdmin = auth ? await hasActiveRole(c.env.DB, auth.id, 'PENTADBIR_SISTEM') : false;
+
+      // Tarikh pemeriksaan ditetapkan oleh Penyelia Lokasi bagi ruang itu (atau pentadbir).
+      const changesDates = body.tarikhMula !== undefined || body.tarikhTamat !== undefined;
+      if (changesDates) {
+        if (!isAdmin) {
+          const scope = auth
+            ? await loadManageScope(c.env.DB, auth.id)
+            : { isAdmin: false, canManage: false, departmentIds: [], locationIds: [] };
+
+          if (
+            !auth ||
+            !canManageLocation(scope, {
+              id: current.location_id,
+              departmentId: current.department_id,
+            })
+          ) {
+            return c.json(
+              {
+                success: false,
+                code: 'DATE_FORBIDDEN',
+                message:
+                  'Akses ditolak: hanya Penyelia Lokasi bagi ruang ini (atau Pentadbir Sistem) boleh menetapkan tarikh pemeriksaan.',
+              },
+              403
+            );
+          }
+        }
+
+        const mula = body.tarikhMula ?? current.tarikh_mula ?? '';
+        const tamat = body.tarikhTamat ?? current.tarikh_tamat ?? '';
+
+        if (!mula || !tamat) {
+          return c.json(
+            {
+              success: false,
+              code: 'INVALID_DATE',
+              message: 'Tarikh mula dan tarikh tamat pemeriksaan perlu diisi serentak.',
+            },
+            400
+          );
+        }
+        if (tamat < mula) {
+          return c.json(
+            {
+              success: false,
+              code: 'INVALID_DATE',
+              message: 'Tarikh tamat tidak boleh lebih awal daripada tarikh mula.',
+            },
+            400
+          );
+        }
+      }
 
       // PBAC: penetapan pemeriksa hanya melalui endpoint tuntutan slot (atau pentadbir).
       const changesInspectors =

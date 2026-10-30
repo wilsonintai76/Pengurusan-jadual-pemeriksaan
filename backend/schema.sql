@@ -161,13 +161,14 @@ CREATE TABLE IF NOT EXISTS inspection_schedules (
   id TEXT PRIMARY KEY,                       -- cth: 'JAD-2026-001'
   session_id TEXT NOT NULL,                  -- FK ke inspection_sessions
   kod TEXT NOT NULL UNIQUE,                  -- cth: 'JAD/JTMK/2026/01'
-  location_id TEXT NOT NULL,                 -- FK ke locations
+  location_id TEXT NOT NULL,                 -- FK ke locations (satu ruang = satu jadual per sesi)
   department_id TEXT NOT NULL,               -- FK ke departments
   asset_category_id TEXT NOT NULL,           -- FK ke asset_categories
-  tarikh_mula TEXT NOT NULL,
-  tarikh_tamat TEXT NOT NULL,
-  pemeriksa1_id TEXT NOT NULL,               -- FK ke officers (Pemeriksa Silang 1)
-  pemeriksa2_id TEXT NOT NULL,               -- FK ke officers (Pemeriksa Silang 2)
+  siri INTEGER NOT NULL DEFAULT 1,           -- Siri pemeriksaan 1/2/3 (sukuan)
+  tarikh_mula TEXT,                          -- NULL = belum ditetapkan oleh Penyelia Lokasi
+  tarikh_tamat TEXT,                         -- NULL = belum ditetapkan oleh Penyelia Lokasi
+  pemeriksa1_id TEXT,                        -- NULL = slot belum dituntut (self-assign pemeriksa)
+  pemeriksa2_id TEXT,                        -- NULL = slot belum dituntut (self-assign pemeriksa)
   status_id TEXT NOT NULL DEFAULT 'BELUM_MULA',
   catatan TEXT,
   kewpa11_r2_key TEXT,                       -- Kunci objek fail R2 untuk KEW.PA-11 bertandatangan
@@ -187,6 +188,8 @@ CREATE TABLE IF NOT EXISTS inspection_schedules (
 CREATE INDEX IF NOT EXISTS idx_sched_loc ON inspection_schedules(location_id);
 CREATE INDEX IF NOT EXISTS idx_sched_dept ON inspection_schedules(department_id);
 CREATE INDEX IF NOT EXISTS idx_sched_status ON inspection_schedules(status_id);
+-- Setiap ruang diperiksa SEKALI sahaja dalam satu sesi (Siri 1, 2 atau 3).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sched_session_loc ON inspection_schedules(session_id, location_id);
 
 -- --------------------------------------------------------------------
 -- 7. LAPORAN PEMERIKSAAN & PRA-JKPAK (3NF)
@@ -732,16 +735,17 @@ CREATE VIEW v_schedules_full AS
 SELECT
   s.id,
   s.kod,
+  s.siri,
   s.department_id AS jabatan,
   loc.nama AS lokasi,
   loc.kod_ruang AS kodRuang,
   ac.nama AS kategori,
   (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id) AS kuantiti,
-  s.tarikh_mula AS tarikhMula,
-  s.tarikh_tamat AS tarikhTamat,
-  p1.nama AS pemeriksa1,
+  COALESCE(s.tarikh_mula, '') AS tarikhMula,
+  COALESCE(s.tarikh_tamat, '') AS tarikhTamat,
+  COALESCE(p1.nama, '') AS pemeriksa1,
   p1.emel AS pemeriksa1Email,
-  p2.nama AS pemeriksa2,
+  COALESCE(p2.nama, '') AS pemeriksa2,
   p2.emel AS pemeriksa2Email,
   COALESCE(
     (SELECT o.nama FROM location_custodians lc JOIN officers o ON o.id = lc.officer_id WHERE lc.location_id = s.location_id LIMIT 1),
@@ -762,8 +766,9 @@ FROM inspection_schedules s
 JOIN locations loc ON loc.id = s.location_id
 JOIN asset_categories ac ON ac.id = s.asset_category_id
 JOIN inspection_statuses st ON st.id = s.status_id
-JOIN officers p1 ON p1.id = s.pemeriksa1_id
-JOIN officers p2 ON p2.id = s.pemeriksa2_id
+-- Pemeriksa boleh belum dituntut (NULL) sehingga pemeriksa self-assign.
+LEFT JOIN officers p1 ON p1.id = s.pemeriksa1_id
+LEFT JOIN officers p2 ON p2.id = s.pemeriksa2_id
 LEFT JOIN officers cb ON cb.id = s.created_by_id
 LEFT JOIN inspection_reports r ON r.schedule_id = s.id;
 

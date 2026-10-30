@@ -30,12 +30,20 @@ export interface LaporanPraJkpak {
 export interface InspectionSchedule {
   id: string;
   kod: string;
+  /** Siri pemeriksaan 1/2/3 (sukuan) — satu ruang hanya dijadualkan sekali per sesi. */
+  siri?: number;
+  /** Kod ruang direktori lokasi (untuk padanan jadual ↔ ruang). */
+  kodRuang?: string;
+  /** ID lokasi yang dipilih semasa pendaftaran jadual. */
+  lokasiId?: string;
   jabatan: string;
   lokasi: string;
   kategori: AssetCategory;
   kuantiti: number;
+  /** Kosong ('') = belum ditetapkan oleh Penyelia Lokasi. */
   tarikhMula: string;
   tarikhTamat: string;
+  /** Kosong ('') = slot belum dituntut (self-assign pemeriksa). */
   pemeriksa1: string;
   pemeriksa1Email?: string;
   pemeriksa2: string;

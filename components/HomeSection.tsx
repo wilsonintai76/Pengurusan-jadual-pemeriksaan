@@ -57,6 +57,8 @@ export default function HomeSection({
   const deadline7DaysList = useMemo(() => {
     return schedules
       .filter((s) => s.status !== 'Selesai')
+      // Jadual tanpa tarikh (menunggu Penyelia Lokasi) tidak masuk tetingkap segera.
+      .filter((s) => Boolean(s.tarikhTamat))
       .map((s) => {
         const endDate = new Date(s.tarikhTamat);
         const diffTime = endDate.getTime() - today.getTime();

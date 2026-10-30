@@ -249,8 +249,32 @@ peranan serentak, setiap satu dengan skop dan tempoh sendiri (`role_assignments`
 
 ## Pelaksanaan Tugasan Pemeriksaan (PBAC Enforcement)
 
-Peranan `officers.peranan` hanyalah label warisan. **Hak melaksanakan pemeriksaan** hanya datang
-daripada baris `role_assignments` yang aktif — iaitu lantikan dengan `valid_from`/`valid_to`.
+### Pendaftaran jadual: ruang + siri sahaja (3 sukuan)
+
+PPAJ/PPAU hanya memilih **ruang jabatan sendiri** dan **Siri 1/2/3**. Medan lain diurus oleh pihak lain:
+
+| Perkara | Siapa yang isi | Nota |
+|---|---|---|
+| Ruang + Siri | PPAJ/PPAU (atau Pentadbir Sistem) | `POST /api/schedules` menerima `{ lokasiId, siri, catatan? }` sahaja |
+| Tarikh mula/tamat | **Penyelia Lokasi** ruang itu (atau pentadbir) | `PUT /api/schedules/:id` – disekat `403 DATE_FORBIDDEN` bagi peranan lain; tarikh dikosongkan (`NULL`) semasa daftar |
+| Pegawai pemeriksa | **Pemeriksa sendiri** (self-assign) | Slot `pemeriksa1_id`/`pemeriksa2_id` kekal `NULL` sehingga `POST /api/schedules/:id/claim` |
+| Kategori aset | Sistem | sentiasa `Semua (Harta Modal & Aset Bernilai Rendah)` |
+
+Kekangan yang dikuatkuasakan:
+
+- **Satu ruang = satu jadual per sesi** — indeks unik `(session_id, location_id)`; cubaan kedua
+  dipulangkan `409 ALREADY_SCHEDULED` bersama siri/kod sedia ada. UI hanya menyenaraikan ruang yang
+  belum dijadualkan.
+- `siri` mesti 1, 2 atau 3 (`400 INVALID_SIRI`); bulan setiap siri dibaca daripada takwim
+  (`Tempoh Pemeriksaan Sukuan N`), dengan lalai Mac/Jun/September.
+- Borang memaparkan **anggaran sasaran**: bilangan ruang jabatan, ruang siri semasa yang sudah
+  dijadualkan, baki ruang dan sasaran akhir **100%**; siri yang paling sedikit ruang dicadangkan
+  secara lalai ([`lib/siriPemeriksaan.ts`](lib/siriPemeriksaan.ts)).
+- Skop jabatan disemak: PPAJ/KJ hanya untuk ruang jabatannya (`403 DEPARTMENT_FORBIDDEN`).
+
+Migrasi `backend/migrations/2026-10-30-schedule-siri.sql` (dijalankan automatik oleh
+`scripts/deploy.mjs` apabila lajur `siri` belum wujud) membina semula jadual dengan
+`tarikh_mula`, `tarikh_tamat`, `pemeriksa1_id` dan `pemeriksa2_id` boleh `NULL`.
 
 ### Peraturan pelaksanaan
 
@@ -260,8 +284,7 @@ daripada baris `role_assignments` yang aktif — iaitu lantikan dengan `valid_fr
 | | Bukan Penyelia Lokasi ruang/jabatan itu, bukan Penolong Pegawai Aset jabatan itu, bukan penjaga ruang (KEW.PA-7) |
 | | Mod silang (`enforceCrossInspection`) → jabatan pemeriksa mesti berbeza |
 | | Slot belum dipegang pemeriksa bertauliah lain; pegawai belum memegang slot lain |
-| Kemas kini laporan / KEW.PA-11 (`PUT /api/schedules/:id`) | Mesti pemeriksa yang ditugaskan bagi jadual itu **dan** lantikan masih aktif |
-| Tukar nama pemeriksa pada jadual | Hanya melalui tuntutan slot atau oleh `PENTADBIR_SISTEM` |
+| Kemas kini laporan / KEW.PA-11 (`PUT /api/schedules/:id`) | Mesti pemeriksa yang ditugaskan bagi jadual itu **dan** lantikan masih aktif || Tukar nama pemeriksa pada jadual | Hanya melalui tuntutan slot atau oleh `PENTADBIR_SISTEM` |
 
 ### Jawatan vs Lantikan (dua dimensi)
 
