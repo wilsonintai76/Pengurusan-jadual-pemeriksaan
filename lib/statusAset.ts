@@ -9,12 +9,25 @@ export interface StatusAsetMeta {
   dokumen: string | null;
   /** Bilangan dikira automatik (A = baki aset). */
   auto?: boolean;
+  /** Pilihan sebab piawai (cip) bagi status yang tiada dokumen. */
+  sebabPiawai?: string[];
 }
 
 /** Enam status fizikal aset (KEW.PA-11) — selaras `backend/src/lib/kewpa11Status.ts`. */
 export const STATUS_ASET: StatusAsetMeta[] = [
   { kod: 'A', label: 'Sedang Digunakan', dokumen: null, auto: true },
-  { kod: 'B', label: 'Tidak Digunakan', dokumen: null },
+  {
+    kod: 'B',
+    label: 'Tidak Digunakan',
+    dokumen: null,
+    sebabPiawai: [
+      'Tiada dalam silibus / tidak lagi digunakan',
+      'Aset lapuk (teknologi usang)',
+      'Melebihi keperluan unit',
+      'Ralat perolehan / tidak sesuai dengan keperluan',
+      'Rosak tidak ekonomik untuk dibaiki',
+    ],
+  },
   { kod: 'C', label: 'Perlu Pembaikan', dokumen: 'Laporan kerosakan' },
   { kod: 'D', label: 'Sedang Diselenggara', dokumen: 'LPO / pesanan kerja' },
   { kod: 'E', label: 'Pinjaman', dokumen: 'Borang pinjaman' },

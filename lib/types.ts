@@ -16,10 +16,12 @@ export type KodStatusAset = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 export type PecahanStatus = Record<KodStatusAset, number>;
 
 export interface JustifikasiStatus {
-  /** Ada dokumen sokongan? */
-  adaDokumen: boolean;
+  /** Ada dokumen sokongan? (status C–F) */
+  adaDokumen?: boolean;
   /** No. rujukan dokumen (pilihan). */
   rujukan?: string;
+  /** Sebab piawai terpilih (status B — Tidak Digunakan). */
+  sebab?: string;
 }
 
 export type JustifikasiMap = Partial<Record<KodStatusAset, JustifikasiStatus>>;

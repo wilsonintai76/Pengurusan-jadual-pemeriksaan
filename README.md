@@ -442,7 +442,7 @@ Backfill `officers.peranan → role_assignments`:
 | Kod | Status | Rekod sokongan bila > 0 |
 |---|---|---|
 | A | Sedang Digunakan | **Dikira automatik** = `kuantiti aset ruang − (B+C+D+E+F)`; medan baca-sahaja |
-| B | Tidak Digunakan | Tiada justifikasi tambahan diperlukan |
+| B | Tidak Digunakan | Cip sebab piawai (tiada dalam silibus, aset lapuk, melebihi keperluan, ralat perolehan, tidak ekonomik dibaiki) - tiada dokumen |
 | C | Perlu Pembaikan | Toggle **Ada / Tiada laporan kerosakan** (+ no. rujukan jika ada) |
 | D | Sedang Diselenggara | Toggle **Ada / Tiada LPO / pesanan kerja** (+ no. rujukan) |
 | E | Pinjaman | Toggle **Ada / Tiada borang pinjaman** (+ no. rujukan) |

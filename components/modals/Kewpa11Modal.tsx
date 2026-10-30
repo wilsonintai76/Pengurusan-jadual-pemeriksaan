@@ -65,9 +65,18 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
     setJustifikasi((prev) => ({
       ...prev,
       [kod]: {
+        ...prev[kod],
         adaDokumen: patch.adaDokumen ?? prev[kod]?.adaDokumen ?? true,
         rujukan: patch.rujukan ?? prev[kod]?.rujukan ?? '',
       },
+    }));
+  };
+
+  /** Status B hanya merekod sebab piawai (cip), tanpa dokumen. */
+  const setSebabPiawai = (sebab: string) => {
+    setJustifikasi((prev) => ({
+      ...prev,
+      B: { ...prev.B, sebab: prev.B?.sebab === sebab ? '' : sebab },
     }));
   };
 
@@ -242,7 +251,36 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
             )}
           </div>
 
-          {/* 2. Dokumen sokongan Ada/Tiada bagi C–F */}
+          {/* 2a. Sebab piawai bagi B — Tidak Digunakan (tiada dokumen) */}
+          {pecahan.B > 0 && (
+            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/60 space-y-2">
+              <h4 className="font-bold text-slate-800 text-xs">
+                B. Tidak Digunakan — {pecahan.B} aset{' '}
+                <span className="font-normal text-slate-500">(pilih sebab piawai)</span>
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {(STATUS_ASET.find((status) => status.kod === 'B')?.sebabPiawai ?? []).map((sebab) => {
+                  const dipilih = justifikasi.B?.sebab === sebab;
+                  return (
+                    <button
+                      key={sebab}
+                      type="button"
+                      onClick={() => setSebabPiawai(sebab)}
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition ${
+                        dipilih
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                      }`}
+                    >
+                      {sebab}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 2b. Dokumen sokongan Ada/Tiada bagi C–F */}
           {STATUS_BERDOKUMEN.filter((kod) => pecahan[kod] > 0).map((kod) => {
             const meta = STATUS_ASET.find((status) => status.kod === kod)!;
             const ada = justifikasi[kod]?.adaDokumen ?? true;
