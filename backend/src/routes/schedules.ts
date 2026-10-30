@@ -10,6 +10,7 @@ import {
 import { getAuthUser, type AppEnv } from '../middleware/auth';
 import { hasActiveRole, listAssignmentsForOfficer } from '../lib/roles';
 import { canManageDepartment, canManageLocation, loadManageScope } from '../lib/permissions';
+import { windowUntukSiri } from '../lib/takwimSiri';
 import {
   evaluateInspectionEligibility,
   loadSchedulePolicyRow,
@@ -384,6 +385,15 @@ export const schedulesRoute = new Hono<AppEnv>()
       const statusId = await resolveStatusId(c.env.DB, 'Belum Mula');
       const id = `JAD-${year}-${Date.now().toString(36).toUpperCase()}`;
 
+      // Tarikh lalai = bulan siri dalam takwim sesi (boleh dilaras Penyelia Lokasi
+      // dalam julat siri yang sama).
+      const { results: takwimRows } = await c.env.DB.prepare(
+        `SELECT tarikh, tajuk, kategori, catatan FROM annual_calendar WHERE tahun = ?`
+      )
+        .bind(year)
+        .all<{ tarikh: string; tajuk: string; kategori: string; catatan: string | null }>();
+      const julat = windowUntukSiri(year, siri, takwimRows ?? []);
+
       const countRow = await c.env.DB.prepare(
         'SELECT COUNT(*) AS total FROM inspection_schedules WHERE department_id = ? AND session_id = ?'
       )
@@ -400,7 +410,7 @@ export const schedulesRoute = new Hono<AppEnv>()
            id, session_id, kod, location_id, department_id, asset_category_id, siri,
            tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id, status_id,
            catatan, created_by_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)`
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`
       )
         .bind(
           id,
@@ -410,6 +420,8 @@ export const schedulesRoute = new Hono<AppEnv>()
           location.departmentId,
           assetCategoryId,
           siri,
+          julat.mula,
+          julat.tamat,
           statusId,
           body.catatan || null,
           auth.id
@@ -425,7 +437,7 @@ export const schedulesRoute = new Hono<AppEnv>()
         decision: 'PERMIT',
         policyId: 'POL_INSPECTION_TASK_ASSIGNMENT',
         resourceId: id,
-        notes: `Jadual ${kod} (Siri ${siri}) bagi ${location.nama} didaftarkan.`,
+        notes: `Jadual ${kod} (Siri ${siri}) bagi ${location.nama} didaftarkan — tarikh lalai ${julat.label}.`,
       });
 
       const saved = await findScheduleRow(c.env.DB, id);
@@ -461,18 +473,23 @@ export const schedulesRoute = new Hono<AppEnv>()
       const body = await c.req.json();
 
       const current = await c.env.DB.prepare(
-        `SELECT id, department_id, location_id, tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id
-         FROM inspection_schedules WHERE id = ?`
+        `SELECT s.id, s.siri, s.department_id, s.location_id, s.tarikh_mula, s.tarikh_tamat,
+                s.pemeriksa1_id, s.pemeriksa2_id, ss.tahun AS sessionTahun
+           FROM inspection_schedules s
+           JOIN inspection_sessions ss ON ss.id = s.session_id
+          WHERE s.id = ?`
       )
         .bind(id)
         .first<{
           id: string;
+          siri: number;
           department_id: string;
           location_id: string;
           tarikh_mula: string | null;
           tarikh_tamat: string | null;
           pemeriksa1_id: string | null;
           pemeriksa2_id: string | null;
+          sessionTahun: number;
         }>();
 
       if (!current) {
@@ -528,6 +545,27 @@ export const schedulesRoute = new Hono<AppEnv>()
               success: false,
               code: 'INVALID_DATE',
               message: 'Tarikh tamat tidak boleh lebih awal daripada tarikh mula.',
+            },
+            400
+          );
+        }
+
+        // Tarikh mesti kekal dalam parameter siri (bulan takwim siri itu).
+        const tahun = Number(current.sessionTahun) || new Date().getFullYear();
+        const { results: takwimRows } = await c.env.DB.prepare(
+          `SELECT tarikh, tajuk, kategori, catatan FROM annual_calendar WHERE tahun = ?`
+        )
+          .bind(tahun)
+          .all<{ tarikh: string; tajuk: string; kategori: string; catatan: string | null }>();
+        const julat = windowUntukSiri(tahun, Number(current.siri) || 1, takwimRows ?? []);
+
+        if (mula < julat.mula || tamat > julat.tamat) {
+          return c.json(
+            {
+              success: false,
+              code: 'OUT_OF_SIRI_WINDOW',
+              message: `Tarikh mesti dalam Siri ${current.siri}: ${julat.label}.`,
+              data: julat,
             },
             400
           );

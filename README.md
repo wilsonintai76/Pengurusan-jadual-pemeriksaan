@@ -256,7 +256,7 @@ PPAJ/PPAU hanya memilih **ruang jabatan sendiri** dan **Siri 1/2/3**. Medan lain
 | Perkara | Siapa yang isi | Nota |
 |---|---|---|
 | Ruang + Siri | PPAJ/PPAU (atau Pentadbir Sistem) | `POST /api/schedules` menerima `{ lokasiId, siri, catatan? }` sahaja |
-| Tarikh mula/tamat | **Penyelia Lokasi** ruang itu (atau pentadbir) | `PUT /api/schedules/:id` – disekat `403 DATE_FORBIDDEN` bagi peranan lain; tarikh dikosongkan (`NULL`) semasa daftar |
+| Tarikh mula/tamat | **Penyelia Lokasi** ruang itu (atau pentadbir) | Lalai = bulan siri dalam takwim; `PUT /api/schedules/:id` disekat `403 DATE_FORBIDDEN` bagi peranan lain dan `400 OUT_OF_SIRI_WINDOW` jika tarikh keluar julat siri |
 | Pegawai pemeriksa | **Pemeriksa sendiri** (self-assign) | Slot `pemeriksa1_id`/`pemeriksa2_id` kekal `NULL` sehingga `POST /api/schedules/:id/claim` |
 | Kategori aset | Sistem | sentiasa `Semua (Harta Modal & Aset Bernilai Rendah)` |
 
@@ -265,6 +265,12 @@ Kekangan yang dikuatkuasakan:
 - **Satu ruang = satu jadual per sesi** — indeks unik `(session_id, location_id)`; cubaan kedua
   dipulangkan `409 ALREADY_SCHEDULED` bersama siri/kod sedia ada. UI hanya menyenaraikan ruang yang
   belum dijadualkan.
+- **Tarikh mesti dalam siri**: julat siri = sebulan penuh bulan takwim
+  (`Tempoh Pemeriksaan Sukuan N` → bulan dalam catatan/tarikh), lalai Mac/Jun/September. Semasa daftar,
+  `tarikh_mula`/`tarikh_tamat` diisi dengan julat penuh bulan itu; Penyelia Lokasi boleh
+  melaraskannya **dalam julat yang sama sahaja** (`400 OUT_OF_SIRI_WINDOW` jika keluar).
+  Logik dikongsi: [`backend/src/lib/takwimSiri.ts`](backend/src/lib/takwimSiri.ts) dan
+  [`lib/siriPemeriksaan.ts`](lib/siriPemeriksaan.ts) (kedua-duanya diuji).
 - `siri` mesti 1, 2 atau 3 (`400 INVALID_SIRI`); bulan setiap siri dibaca daripada takwim
   (`Tempoh Pemeriksaan Sukuan N`), dengan lalai Mac/Jun/September.
 - Borang memaparkan **anggaran sasaran**: bilangan ruang jabatan, ruang siri semasa yang sudah

@@ -4,7 +4,7 @@ import { InspectionSchedule } from '@/lib/types';
 import { deriveKategoriRuang } from '@/lib/kodLokasi';
 import { useDepartments, useLocations } from '@/lib/useReferenceData';
 import { dataApi, type CalendarItem } from '@/lib/dataApi';
-import { bulanSiri, kiraRuangSiri, kiraSasaranSiri, SIRI_LABEL } from '@/lib/siriPemeriksaan';
+import { bulanSiri, kiraRuangSiri, kiraSasaranSiri, SIRI_LABEL, windowSiri } from '@/lib/siriPemeriksaan';
 
 interface ScheduleModalProps {
   schedule: InspectionSchedule | null;
@@ -90,6 +90,17 @@ export default function ScheduleModal({
   const selectedLocation = locations.find((item) => item.id === lokasiId);
   const ruangSiri = kiraRuangSiri(schedules, siri, jabatan);
 
+  // Julat tarikh siri (bulan takwim) — tarikh rancangan wajib kekal dalam julat ini.
+  const siriAktif = isEdit ? Number(schedule?.siri) || 1 : siri;
+  const julat = windowSiri(siriAktif, takwim, Number(tahun));
+
+  // Tarikh lalai = julat penuh bulan siri, hanya apabila jadual belum ada tarikh.
+  useEffect(() => {
+    if (!isEdit || !takwim) return;
+    setTarikhMula((prev) => prev || julat.mula);
+    setTarikhTamat((prev) => prev || julat.tamat);
+  }, [isEdit, takwim, julat.mula, julat.tamat]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -101,6 +112,12 @@ export default function ScheduleModal({
       }
       if (tarikhTamat < tarikhMula) {
         setErrorMsg('Tarikh tamat tidak boleh lebih awal daripada tarikh mula.');
+        return;
+      }
+      if (tarikhMula < julat.mula || tarikhTamat > julat.tamat) {
+        setErrorMsg(
+          `Tarikh mesti dalam ${SIRI_LABEL[siriAktif]} — ${julat.label}. Ubah tarikh dalam julat ini sahaja.`
+        );
         return;
       }
       onSave({ tarikhMula, tarikhTamat, catatan: catatan.trim() });
@@ -172,6 +189,11 @@ export default function ScheduleModal({
                 </p>
               </div>
 
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-900">
+                <strong>Tarikh mesti dalam {SIRI_LABEL[siriAktif]}</strong> — {julat.label}.
+                Tarikh lalai diambil daripada takwim sesi; anda boleh ubah dalam julat siri ini sahaja.
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold text-slate-800 mb-1">
@@ -180,6 +202,8 @@ export default function ScheduleModal({
                   <input
                     type="date"
                     required
+                    min={julat.mula}
+                    max={julat.tamat}
                     value={tarikhMula}
                     onChange={(e) => setTarikhMula(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
@@ -192,6 +216,8 @@ export default function ScheduleModal({
                   <input
                     type="date"
                     required
+                    min={julat.mula}
+                    max={julat.tamat}
                     value={tarikhTamat}
                     onChange={(e) => setTarikhTamat(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
@@ -352,7 +378,7 @@ export default function ScheduleModal({
                     {selectedLocation.penjaga && selectedLocation.penjaga !== 'Belum Dilantik'
                       ? selectedLocation.penjaga
                       : 'Belum Dilantik'}{' '}
-                    · akan menetapkan tarikh dalam {bulanSiri(siri, takwim)}
+                    · tarikh lalai {windowSiri(siri, takwim, Number(tahun)).label}
                   </p>
                 </div>
               )}

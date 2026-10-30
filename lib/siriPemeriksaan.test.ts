@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bulanSiri, kiraRuangSiri, kiraSasaranSiri } from './siriPemeriksaan';
+import { bulanSiri, kiraRuangSiri, kiraSasaranSiri, windowSiri } from './siriPemeriksaan';
 import type { CalendarItem } from './dataApi';
 import type { InspectionSchedule } from './types';
 
@@ -76,8 +76,21 @@ describe('kiraRuangSiri', () => {
   });
 });
 
-describe('kiraSasaranSiri', () => {
-  it('mencadangkan siri dengan ruang paling sedikit dan mengira baki ruang', () => {
+describe('windowSiri', () => {
+  it('mengambil julat bulan daripada takwim siri', () => {
+    expect(windowSiri(2, [takwimItem({ tarikh: '2026-06-01', tajuk: 'Tempoh Pemeriksaan Sukuan 2/2026', catatan: 'Sepanjang Jun 2026' })], 2026)).toMatchObject({
+      mula: '2026-06-01',
+      tamat: '2026-06-30',
+    });
+  });
+
+  it('jatuh balik ke bulan lalai tanpa takwim', () => {
+    expect(windowSiri(1, [], 2027)).toMatchObject({ mula: '2027-03-01', tamat: '2027-03-31' });
+    expect(windowSiri(3, [], 2027)).toMatchObject({ mula: '2027-09-01', tamat: '2027-09-30' });
+  });
+});
+
+describe('kiraSasaranSiri', () => {  it('mencadangkan siri dengan ruang paling sedikit dan mengira baki ruang', () => {
     const rows = [
       schedule({ id: 'A', siri: 1 }),
       schedule({ id: 'B', siri: 1 }),
