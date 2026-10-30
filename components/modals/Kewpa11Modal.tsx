@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { InspectionSchedule, JustifikasiMap, LaporanPraJkpak, PecahanStatus } from '@/lib/types';
 import { dataApi } from '@/lib/dataApi';
+import { formatTarikhMY } from '@/lib/tarikh';
 import {
   PECAHAN_KOSONG,
   STATUS_ASET,
@@ -21,6 +22,8 @@ import {
 
 interface Kewpa11ModalProps {
   schedule: InspectionSchedule;
+  /** Bukan pemeriksa bertugas → paparan baca-sahaja (laporan & PDF boleh dilihat). */
+  readOnly?: boolean;
   onClose: () => void;
   onSubmit: (scheduleId: string, report: LaporanPraJkpak, kewpa11DocKey: string) => void;
 }
@@ -34,7 +37,7 @@ const WARNA_KAD: Record<string, string> = {
   F: 'border-rose-200 bg-rose-50/40 text-rose-900',
 };
 
-export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11ModalProps) {
+export default function Kewpa11Modal({ schedule, readOnly = false, onClose, onSubmit }: Kewpa11ModalProps) {
   const existing = schedule.laporanPraJkpak;
   const kuantiti = schedule.kuantiti || 0;
 
@@ -130,6 +133,166 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
 
     onSubmit(schedule.id, report, docKey.trim());
   };
+
+  const laporan = schedule.laporanPraJkpak;
+  const pecahanLaporan: PecahanStatus = {
+    ...PECAHAN_KOSONG,
+    A: laporan?.pecahan?.A ?? laporan?.baik ?? sedangDigunakan,
+    B: laporan?.pecahan?.B ?? laporan?.usang ?? 0,
+    C: laporan?.pecahan?.C ?? 0,
+    D: laporan?.pecahan?.D ?? 0,
+    E: laporan?.pecahan?.E ?? 0,
+    F: laporan?.pecahan?.F ?? laporan?.hilang ?? 0,
+  };
+
+  if (readOnly) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-slate-200">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Laporan KEW.PA-11 (Paparan Baca-Sahaja)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Hanya Pegawai Pemeriksa bertugas boleh mengisi atau mengubah laporan ini.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm flex-1">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+              <span className="text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded border border-sky-100 font-mono">
+                {schedule.jabatan} &bull; {schedule.kod}
+              </span>
+              <h4 className="font-bold text-slate-900 text-sm">{schedule.lokasi}</h4>
+              <p className="text-[11px] text-slate-500">
+                Pemeriksa: 1. <strong>{schedule.pemeriksa1 || '-'}</strong> &bull; 2.{' '}
+                <strong>{schedule.pemeriksa2 || '-'}</strong> &bull; Status jadual:{' '}
+                <strong>{schedule.status}</strong>
+              </p>
+            </div>
+
+            {!laporan ? (
+              <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-[11px] font-semibold text-slate-600">
+                Laporan KEW.PA-11 belum diisi oleh pegawai pemeriksa.
+              </p>
+            ) : (
+              <>
+                <div className="border border-slate-200 rounded-2xl p-4 space-y-2">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wide text-slate-700">
+                    Status fizikal aset (A–F)
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {STATUS_ASET.map((status) => (
+                      <div
+                        key={status.kod}
+                        className={`rounded-xl border p-2 ${WARNA_KAD[status.kod]}`}
+                      >
+                        <span className="block text-[10px] font-bold">
+                          {status.kod}. {status.label}
+                        </span>
+                        <span className="font-mono text-sm font-bold">
+                          {pecahanLaporan[status.kod]} unit
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {STATUS_BERDOKUMEN.filter((kod) => pecahanLaporan[kod] > 0).map((kod) => {
+                  const meta = STATUS_ASET.find((status) => status.kod === kod)!;
+                  const rekod = laporan.justifikasi?.[kod];
+                  const ada = rekod?.adaDokumen;
+                  return (
+                    <div
+                      key={kod}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"
+                    >
+                      <span className="text-[11px] font-semibold text-slate-700">
+                        {kod}. {meta.label} · {pecahanLaporan[kod]} aset
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                          ada === true
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                            : ada === false
+                              ? 'border-rose-200 bg-rose-50 text-rose-700'
+                              : 'border-slate-200 bg-white text-slate-500'
+                        }`}
+                      >
+                        {ada === true
+                          ? `Ada ${meta.dokumen}`
+                          : ada === false
+                            ? `Tiada ${meta.dokumen}`
+                            : 'Tidak direkod'}
+                      </span>
+                      {rekod?.rujukan && (
+                        <span className="font-mono text-[10px] text-slate-600">{rekod.rujukan}</span>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {laporan.justifikasi?.B?.sebab && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-700">
+                    <strong>B. Tidak Digunakan:</strong> {laporan.justifikasi.B.sebab}
+                  </p>
+                )}
+
+                {laporan.cadangan && (
+                  <div className="rounded-xl border border-slate-200 p-3 space-y-1">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wide text-slate-700">
+                      Cadangan / syor pemeriksa
+                    </h4>
+                    <p className="text-[11px] text-slate-700">{laporan.cadangan}</p>
+                    <p className="text-[10px] text-slate-500">
+                      Dihantar: {laporan.tarikhHantar ? formatTarikhMY(laporan.tarikhHantar) : '-'}
+                      {laporan.disahkanOleh ? ` · ${laporan.disahkanOleh}` : ''}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {docKey ? (
+              <a
+                href={dataApi.storage.fileUrl(docKey)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] font-bold text-sky-900 hover:bg-sky-100"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <FileCheck className="h-3.5 w-3.5" /> Lihat borang KEW.PA-11 (PDF di R2)
+                </span>
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-[10px] font-semibold text-slate-500">
+                Borang KEW.PA-11 (PDF) belum dimuat naik.
+              </p>
+            )}
+          </div>
+
+          <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-white"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">

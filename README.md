@@ -259,6 +259,11 @@ PPAJ/PPAU hanya memilih **ruang jabatan sendiri** dan **Siri 1/2/3**. Medan lain
 | Tarikh mula/tamat | **Penyelia Lokasi** ruang itu (atau pentadbir) | Lalai = bulan siri dalam takwim; `PUT /api/schedules/:id` disekat `403 DATE_FORBIDDEN` bagi peranan lain dan `400 OUT_OF_SIRI_WINDOW` jika tarikh keluar julat siri |
 | Pegawai pemeriksa | **Pemeriksa sendiri** (self-assign) | Slot `pemeriksa1_id`/`pemeriksa2_id` kekal `NULL` sehingga `POST /api/schedules/:id/claim`. Status jadual bertukar ke **Sedang Dijalankan** hanya apabila **kedua-dua** slot dituntut. |
 | KEW.PA-11 | Pemeriksa | Dimuat naik ke **Cloudflare R2** (`POST /api/storage/upload`, `kewpa11_r2_key`); status jadual bertukar ke **Selesai** secara automatik pada pelayan |
+
+**Paparan laporan:** mengisi/mengubah laporan KEW.PA-11 hanya untuk **Pegawai Pemeriksa yang ditugaskan**
+(atau Pentadbir Sistem, disemak di Worker melalui `POL_INSPECTION_TASK_ASSIGNMENT`). Pengguna lain yang
+menekan butang KEW.PA-11 mendapat paparan **baca-sahaja** — pecahan status A–F, rekod dokumen Ada/Tiada
+beserta no. rujukan, cadangan pemeriksa, tarikh hantar, dan pautan **PDF di R2** (jika sudah dimuat naik).
 | Kategori aset | Sistem | sentiasa `Semua (Harta Modal & Aset Bernilai Rendah)` |
 
 Paparan senarai jadual turut membantu pemeriksa:

@@ -184,6 +184,19 @@ export default function App() {
     );
   }, [myAssignments, currentUser?.role]);
 
+  /**
+   * Laporan KEW.PA-11 hanya boleh diisi oleh Pegawai Pemeriksa yang ditugaskan
+   * (atau Pentadbir Sistem); pengguna lain hanya boleh melihat (baca-sahaja).
+   */
+  const canEditKewpa11 = (schedule: InspectionSchedule) => {
+    if (isSystemAdmin) return true;
+    const emel = String(currentUser?.email ?? '').toLowerCase();
+    if (!emel) return false;
+    return [schedule.pemeriksa1Email, schedule.pemeriksa2Email]
+      .filter(Boolean)
+      .some((email) => String(email).toLowerCase() === emel);
+  };
+
   const handleSaveUserProfile = (updatedUser: UserSession) => {
     setCurrentUser(updatedUser);
     try {
@@ -1112,6 +1125,7 @@ export default function App() {
       {showKewpaModal && activeKewpaSchedule && (
         <Kewpa11Modal
           schedule={activeKewpaSchedule}
+          readOnly={!canEditKewpa11(activeKewpaSchedule)}
           onClose={() => {
             setShowKewpaModal(false);
             setActiveKewpaSchedule(null);
