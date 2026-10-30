@@ -152,10 +152,27 @@ export default function MobileBottomNav({
               </button>
             )}
 
-            {/* Secondary Navigation Options */}
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-1 font-mono">
-                Direktori & Seksyen
+            {/* Secondary Navigation Options — kumpulan sama seperti sidebar */}
+            <div className="space-y-2">
+              <span className="block px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Pemeriksaan
+              </span>
+
+              <button
+                onClick={() => handleTabSelect('kitaran')}
+                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                  activeTab === 'kitaran' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <ArrowLeftRight className="w-4 h-4 text-sky-600" />
+                  <span>Kitaran Pemeriksaan</span>
+                </div>
+                <span className="text-[10px] text-sky-700 font-mono">Kolam</span>
+              </button>
+
+              <span className="block px-1 pt-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Direktori
               </span>
 
               <button
@@ -185,19 +202,6 @@ export default function MobileBottomNav({
               </button>
 
               <button
-                onClick={() => handleTabSelect('pekeliling')}
-                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                  activeTab === 'pekeliling' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <BookOpen className="w-4 h-4 text-sky-600" />
-                  <span>Pekeliling TPA (1PP AM 2.4)</span>
-                </div>
-                <span className="text-[10px] text-slate-400">Garis Panduan</span>
-              </button>
-
-              <button
                 onClick={() => handleTabSelect('direktori')}
                 className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
                   activeTab === 'direktori' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
@@ -210,47 +214,55 @@ export default function MobileBottomNav({
                 <span className="text-[10px] text-indigo-700 font-mono font-bold">{ROLE_LABELS.length} Peranan</span>
               </button>
 
-              
+              <span className="block px-1 pt-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Rujukan
+              </span>
 
               <button
-                onClick={() => handleTabSelect('kitaran')}
+                onClick={() => handleTabSelect('pekeliling')}
                 className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                  activeTab === 'kitaran' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                  activeTab === 'pekeliling' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <ArrowLeftRight className="w-4 h-4 text-sky-600" />
-                  <span>Kitaran Pemeriksaan</span>
+                  <BookOpen className="w-4 h-4 text-sky-600" />
+                  <span>Pekeliling TPA (1PP AM 2.4)</span>
                 </div>
-                <span className="text-[10px] text-sky-700 font-mono">Kolam</span>
-              </button>
-
-              <button
-                onClick={() => handleTabSelect('audit')}
-                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                  activeTab === 'audit' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <ShieldCheck className="w-4 h-4 text-purple-600" />
-                  <span>Jejak Audit & Polisi PBAC</span>
-                </div>
-                <span className="text-[10px] text-purple-700 font-mono">Enjin Dasar</span>
+                <span className="text-[10px] text-slate-400">Garis Panduan</span>
               </button>
 
               {isAdmin && (
-                <button
-                  onClick={() => handleTabSelect('tetapan')}
-                  className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                    activeTab === 'tetapan' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <SlidersHorizontal className="w-4 h-4 text-slate-700" />
-                    <span>Tetapan Sistem & Sandaran</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Konfigurasi</span>
-                </button>
+                <>
+                  <span className="block px-1 pt-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Pentadbiran
+                  </span>
+
+                  <button
+                    onClick={() => handleTabSelect('audit')}
+                    className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                      activeTab === 'audit' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      <span>Jejak Audit & Polisi PBAC</span>
+                    </div>
+                    <span className="text-[10px] text-purple-700 font-mono">Enjin Dasar</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTabSelect('tetapan')}
+                    className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                      activeTab === 'tetapan' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <SlidersHorizontal className="w-4 h-4 text-slate-700" />
+                      <span>Tetapan Sistem & Sandaran</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">Konfigurasi</span>
+                  </button>
+                </>
               )}
             </div>
 

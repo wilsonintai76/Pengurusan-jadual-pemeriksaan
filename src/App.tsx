@@ -954,7 +954,26 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'audit' && <AuditLogSection logs={auditLogs} />}
+          {activeTab === 'audit' && isSystemAdmin && <AuditLogSection logs={auditLogs} />}
+
+          {activeTab === 'audit' && !isSystemAdmin && (
+            <div className="bg-white rounded-2xl border border-rose-200 shadow-2xs p-8 text-center space-y-3">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                <ShieldCheck className="w-6 h-6 text-rose-600" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">Akses Ditolak</h3>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Menu <strong>Jejak Audit PBAC</strong> hanya boleh diakses oleh pegawai dengan lantikan{' '}
+                <span className="font-mono">PENTADBIR_SISTEM</span>.
+              </p>
+              <button
+                onClick={() => setActiveTab('home')}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
+              >
+                Kembali ke Utama
+              </button>
+            </div>
+          )}
 
           {activeTab === 'tetapan' && isSystemAdmin && (
             <TetapanSection

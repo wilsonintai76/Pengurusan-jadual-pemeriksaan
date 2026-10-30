@@ -57,81 +57,121 @@ export default function SidebarNav({
     }, 600);
   };
 
-  const navItems = [
+  type NavItem = {
+    id: string;
+    label: string;
+    icon: typeof Home;
+    badge: string | number | null;
+    badgeColor?: string;
+    description: string;
+    adminOnly?: boolean;
+  };
+
+  /** Kumpulan menu mengikut aliran kerja; kumpulan pentadbir hanya untuk Pentadbir Sistem. */
+  const navGroups: Array<{ label: string; adminOnly?: boolean; items: NavItem[] }> = [
     {
-      id: 'home',
       label: 'Utama',
-      icon: Home,
-      badge: null,
-      description: 'Ringkasan & Takwim',
+      items: [
+        { id: 'home', label: 'Utama', icon: Home, badge: null, description: 'Ringkasan & Takwim' },
+      ],
     },
     {
-      id: 'ejas',
-      label: 'Jadual Pemeriksaan',
-      icon: CalendarCheck,
-      badge: null,
-      description: 'Pemeriksaan 100%',
+      label: 'Pemeriksaan',
+      items: [
+        {
+          id: 'ejas',
+          label: 'Jadual Pemeriksaan',
+          icon: CalendarCheck,
+          badge: null,
+          description: 'Pemeriksaan 100%',
+        },
+        {
+          id: 'kitaran',
+          label: 'Kitaran Pemeriksaan',
+          icon: ArrowLeftRight,
+          badge: null,
+          description: 'Kolam & Timbal Balik',
+        },
+        {
+          id: 'praJkpak',
+          label: 'Kompilasi Pra-JKPAK',
+          icon: FileSignature,
+          badge: praJkpakCount > 0 ? praJkpakCount : null,
+          badgeColor: 'bg-amber-400 text-slate-950',
+          description: 'Kertas Mesyuarat',
+        },
+      ],
     },
     {
-      id: 'lokasi',
-      label: 'Direktori Lokasi',
-      icon: MapPin,
-      badge: null,
-      description: 'Makmal & Ruang Aset',
+      label: 'Direktori',
+      items: [
+        {
+          id: 'lokasi',
+          label: 'Direktori Lokasi',
+          icon: MapPin,
+          badge: null,
+          description: 'Makmal & Ruang Aset',
+        },
+        {
+          id: 'jabatan',
+          label: 'Direktori Jabatan',
+          icon: Building2,
+          badge: null,
+          description: '12 Jabatan & UAP',
+        },
+        {
+          id: 'direktori',
+          label: 'Direktori Pegawai',
+          icon: Users,
+          badge: `${ROLE_LABELS.length} Peranan`,
+          badgeColor: 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/30',
+          description: 'Pengguna, Peranan & Lantikan',
+        },
+      ],
     },
     {
-      id: 'jabatan',
-      label: 'Direktori Jabatan',
-      icon: Building2,
-      badge: null,
-      description: '12 Jabatan & UAP',
+      label: 'Rujukan',
+      items: [
+        {
+          id: 'pekeliling',
+          label: 'Pekeliling TPA',
+          icon: BookOpen,
+          badge: null,
+          description: 'Panduan 1PP AM 2.4',
+        },
+      ],
     },
     {
-      id: 'praJkpak',
-      label: 'Kompilasi Pra-JKPAK',
-      icon: FileSignature,
-      badge: praJkpakCount > 0 ? praJkpakCount : null,
-      badgeColor: 'bg-amber-400 text-slate-950',
-      description: 'Kertas Mesyuarat',
-    },
-    {
-      id: 'pekeliling',
-      label: 'Pekeliling TPA',
-      icon: BookOpen,
-      badge: null,
-      description: 'Panduan 1PP AM 2.4',
-    },
-    {
-      id: 'direktori',
-      label: 'Direktori Pegawai',
-      icon: Users,
-      badge: `${ROLE_LABELS.length} Peranan`,
-      badgeColor: 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/30',
-      description: 'Pengguna, Peranan & Lantikan',
-    },
-    {
-      id: 'kitaran',
-      label: 'Kitaran Pemeriksaan',
-      icon: ArrowLeftRight,
-      badge: null,
-      description: 'Kolam & Timbal Balik',
-    },
-    {
-      id: 'audit',
-      label: 'Jejak Audit PBAC',
-      icon: ShieldCheck,
-      badge: null,
-      description: 'Log Polisi Keselamatan',
-    },
-    {
-      id: 'tetapan',
-      label: 'Tetapan',
-      icon: SlidersHorizontal,
-      badge: null,
-      description: 'Konfigurasi Sistem',
+      label: 'Pentadbiran',
       adminOnly: true,
+      items: [
+        {
+          id: 'audit',
+          label: 'Jejak Audit PBAC',
+          icon: ShieldCheck,
+          badge: null,
+          description: 'Log Polisi Keselamatan',
+          adminOnly: true,
+        },
+        {
+          id: 'tetapan',
+          label: 'Tetapan',
+          icon: SlidersHorizontal,
+          badge: null,
+          description: 'Konfigurasi Sistem',
+          adminOnly: true,
+        },
+      ],
     },
-  ].filter((item) => !('adminOnly' in item) || !item.adminOnly || isAdmin);
+  ];
+
+  const kumpulanDipapar = navGroups
+    .filter((kumpulan) => !kumpulan.adminOnly || isAdmin)
+    .map((kumpulan) => ({
+      ...kumpulan,
+      items: kumpulan.items.filter((item) => !item.adminOnly || isAdmin),
+    }))
+    .filter((kumpulan) => kumpulan.items.length > 0);
 
   return (
     <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 h-screen sticky top-0 bg-slate-950 text-slate-200 flex-col justify-between border-r border-slate-800 shadow-sm z-30 select-none no-print">
@@ -178,33 +218,41 @@ export default function SidebarNav({
           Menu Navigasi
         </p>
 
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
+        {kumpulanDipapar.map((kumpulan) => (
+          <div key={kumpulan.label} className="space-y-1">
+            <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+              {kumpulan.label}
+            </p>
+            {kumpulan.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full px-3 py-2.5 rounded-xl text-xs font-medium transition flex items-center justify-between group ${
-                isActive
-                  ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-900/80'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-slate-400 group-hover:text-amber-400 transition-colors'}`} />
-                <span className="truncate">{item.label}</span>
-              </div>
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  title={item.description}
+                  className={`w-full px-3 py-2.5 rounded-xl text-xs font-medium transition flex items-center justify-between group ${
+                    isActive
+                      ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-900/80'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-slate-400 group-hover:text-amber-400 transition-colors'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
 
-              {item.badge !== null && (
-                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${isActive ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-amber-300 border border-slate-700'}`}>
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+                  {item.badge !== null && (
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${isActive ? 'bg-slate-950 text-amber-300' : item.badgeColor ?? 'bg-slate-800 text-amber-300 border border-slate-700'}`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Sidebar Footer User Area */}

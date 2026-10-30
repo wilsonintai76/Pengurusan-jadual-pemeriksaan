@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getAuthUser, type AppEnv } from '../middleware/auth';
+import { getAuthUser, requireAuth, requireRole, type AppEnv } from '../middleware/auth';
 
 interface AuditRow {
   id: string;
@@ -32,8 +32,8 @@ function mapAuditLog(row: AuditRow) {
 
 export const auditRoute = new Hono<AppEnv>()
 
-  // 1. LIST PBAC AUDIT TRAIL
-  .get('/', async (c) => {
+  // 1. LIST PBAC AUDIT TRAIL — Pentadbir Sistem sahaja (menu Pentadbiran)
+  .get('/', requireAuth, requireRole('PENTADBIR_SISTEM'), async (c) => {
     const limit = Math.min(Number(c.req.query('limit')) || 200, 500);
 
     try {
