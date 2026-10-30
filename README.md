@@ -475,8 +475,48 @@ Pecahan penuh disimpan sebagai JSON dalam `inspection_reports.pecahan_status` / 
 (migrasi `backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
 Pra-JKPAK dipetakan: `baik = A + E`, `rosak = C + D`, `usang = B`, `hilang = F`.
 
-## Pemisahan Tugas & Notifikasi Luput
+## Senarai Aset Belum Diperiksa (eksport SPA)
 
+SPA menyediakan eksport **Senarai Aset Belum Diperiksa** bagi setiap folder/jabatan dengan enam lajur:
+`Label` (No. Siri Pendaftaran), `Jenis Aset`, `Pegawai Penempatan`, `Bahagian`, `Lokasi Terkini`
+(nama ruang sahaja — tiada kod lokasi) dan `Status Aset`. Portal menyimpan baris ini per **sesi**
+dan memadankannya kepada `locations`.
+
+### Jadual
+
+| Jadual | Kandungan |
+|---|---|
+| `uninspected_assets` | satu baris per aset (`UNIQUE(session_id, label)`), `location_id` + `padanan_kaedah` |
+| `uninspected_imports` | sejarah setiap fail yang dimuat naik (bilangan baris, padan, gagal) |
+| `spa_room_alias` | peta kekal nama ruang SPA (dinormalisasi) → `locations.id` |
+
+### Enjin padanan (4 lapis)
+
+1. **LABEL** — `assets.no_siri_pendaftaran` (dinormalisasi) → `assets.location_id`; paling tepat.
+2. **ALIAS** — `spa_room_alias` (dicipta apabila padanan manual disimpan).
+3. **NAMA** — nama lokasi portal yang sama dengan nama ruang SPA.
+4. **NULL** — tiada padanan: baris disimpan dan dipaparkan sebagai *Belum Dipadankan*.
+
+Padanan **MANUAL tidak pernah ditimpa** oleh import seterusnya (UPSERT memeriksa
+`padanan_kaedah = 'MANUAL'` dalam klausa `DO UPDATE`).
+
+### Endpoint
+
+| Method | Laluan | Nota |
+|---|---|---|
+| `POST` | `/api/uninspected/import` | body `{ namaFail, baris[] }` (maks 5000 baris); Pentadbir Sistem atau Penolong Pegawai Aset |
+| `GET` | `/api/uninspected/summary` | bilangan per lokasi + status jadual + kumpulan nama ruang belum dipadankan |
+| `GET` | `/api/uninspected` | tapisan `locationId`, `status`, `q`, `belumPadan=1`, `had` (maks 2000) |
+| `PUT` | `/api/uninspected/:id/padankan` | body `{ locationId, simpanAlias? }`; kemas kini seisi ruang yang sama |
+| `GET` | `/api/uninspected/imports` | sejarah 50 import terakhir |
+| `DELETE` | `/api/uninspected/imports/:id` | buang satu batch (Pentadbir Sistem) |
+
+Laluan `GET` memasang `requireAuth` secara **eksplisit** kerana middleware global hanya mengesahkan
+kaedah bukan-GET. Parser klien (XLSX/CSV) dan normalisasi label berada di
+[`lib/senaraiBelumPeriksa.ts`](lib/senaraiBelumPeriksa.ts); padanan pelayan di
+[`backend/src/lib/senaraiBelumPeriksa.ts`](backend/src/lib/senaraiBelumPeriksa.ts) — kedua-duanya diuji.
+
+## Pemisahan Tugas & Notifikasi Luput
 ### Pengesahan dapatan (separation of duties)
 
 `POST /api/schedules/:id/verify` mengesahkan dapatan pemeriksaan dan menyimpan `disahkan_oleh_id` +

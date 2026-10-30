@@ -911,6 +911,53 @@ CREATE TABLE IF NOT EXISTS annual_calendar (
 
 CREATE INDEX IF NOT EXISTS idx_annual_calendar_year ON annual_calendar(tahun, tarikh);
 
+-- 7. Senarai Aset Belum Diperiksa (eksport SPA per folder/jabatan)
+-- Setiap fail eksport mengandungi aset yang belum diperiksa dalam SPA. Baris disimpan
+-- per sesi pemeriksaan dan dipadankan kepada `locations` melalui label aset / alias ruang.
+CREATE TABLE IF NOT EXISTS uninspected_imports (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  nama_fail TEXT NOT NULL,
+  jumlah_baris INTEGER NOT NULL DEFAULT 0,
+  jumlah_padan INTEGER NOT NULL DEFAULT 0,
+  jumlah_tidak_padan INTEGER NOT NULL DEFAULT 0,
+  dimuat_oleh TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (session_id) REFERENCES inspection_sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS uninspected_assets (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  label TEXT NOT NULL,                        -- No. Siri Pendaftaran (dinormalisasi)
+  jenis_aset TEXT,
+  pegawai_penempatan TEXT,
+  bahagian TEXT,
+  lokasi_spa TEXT,                            -- nama ruang daripada SPA
+  status_aset TEXT,                           -- Sedang Digunakan / Perlu Pembaikan / ...
+  location_id TEXT,                           -- NULL = belum dipadankan
+  padanan_kaedah TEXT,                        -- LABEL | ALIAS | NAMA | MANUAL
+  import_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (session_id, label),
+  FOREIGN KEY (session_id) REFERENCES inspection_sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_uninsp_loc ON uninspected_assets(session_id, location_id);
+CREATE INDEX IF NOT EXISTS idx_uninsp_spa ON uninspected_assets(session_id, lokasi_spa);
+CREATE INDEX IF NOT EXISTS idx_uninsp_import ON uninspected_assets(import_id);
+
+-- Peta kekal nama ruang SPA → lokasi portal (dicipta semasa padanan manual).
+CREATE TABLE IF NOT EXISTS spa_room_alias (
+  nama_spa TEXT PRIMARY KEY,                  -- UPPERCASE, ruang berganda dimampatkan
+  location_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  created_by TEXT,
+  FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+);
+
 -- ====================================================================
 -- NOTA: Skema ini hanya menyemai data rujukan sistem (jabatan, bangunan,
 -- kategori ruang, status pemeriksaan, kategori aset). Tiada data contoh.
