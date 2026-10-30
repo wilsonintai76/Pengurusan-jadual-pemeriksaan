@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatJulatTarikhMY } from '@/lib/tarikh';
 import { InspectionSchedule } from '@/lib/types';
 
 interface PrintAreaProps {
@@ -48,7 +49,7 @@ export default function PrintArea({ mode, schedules }: PrintAreaProps) {
                   {s.kategori} ({s.kuantiti} unit)
                 </td>
                 <td className="border border-black p-2 text-center font-mono text-[11px]">
-                  {s.tarikhMula} - {s.tarikhTamat}
+                  {formatJulatTarikhMY(s.tarikhMula, s.tarikhTamat)}
                 </td>
                 <td className="border border-black p-2 text-[11px]">
                   1. {s.pemeriksa1 || 'Belum dituntut'}<br />

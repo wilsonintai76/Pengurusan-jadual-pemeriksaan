@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Crosshair, ShieldCheck, ShieldAlert, CheckCircle2, CalendarClock } from 'lucide-react';
 import { AppointmentSummary, InspectionSchedule, UserSession } from '@/lib/types';
 import { useCrossPairs } from '@/lib/useReferenceData';
+import { formatTarikhMY } from '@/lib/tarikh';
 
 interface ClaimLocationModalProps {
   schedules: InspectionSchedule[];
@@ -84,13 +85,15 @@ export default function ClaimLocationModal({
               ) : appointment.activeToday ? (
                 <span>
                   <strong>Lantikan Pegawai Pemeriksa aktif</strong> — sah sehingga{' '}
-                  <span className="font-mono font-bold">{appointment.validTo ?? 'kekal'}</span>
+                  <span className="font-mono font-bold">{appointment.validTo ? formatTarikhMY(appointment.validTo) : 'kekal'}</span>
                   {expiringSoon && ` (${appointment.daysRemaining} hari lagi — mohon pembaharuan)`}.
                 </span>
               ) : (
                 <span>
                   <strong>Lantikan pemeriksa telah tamat</strong> pada{' '}
-                  <span className="font-mono font-bold">{appointment.validTo ?? '-'}</span>. Hanya pegawai
+                  <span className="font-mono font-bold">
+                    {appointment.validTo ? formatTarikhMY(appointment.validTo) : '-'}
+                  </span>. Hanya pegawai
                   yang dilantik boleh melaksanakan pemeriksaan — hubungi Pentadbir Sistem untuk pembaharuan.
                 </span>
               )}

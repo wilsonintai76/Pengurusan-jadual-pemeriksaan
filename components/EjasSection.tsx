@@ -25,6 +25,7 @@ import { InspectionSchedule, UserSession, InspectionStatus } from '@/lib/types';
 import { useCrossPairs } from '@/lib/useReferenceData';
 import { dataApi } from '@/lib/dataApi';
 import { assetCsvFileName, buildAssetCsv, downloadCsv } from '@/lib/assetCsv';
+import { formatJulatTarikhMY, formatTarikhMY } from '@/lib/tarikh';
 
 interface EjasSectionProps {
   schedules: InspectionSchedule[];
@@ -543,8 +544,12 @@ export default function EjasSection({
                       <td className="py-3.5 px-4 text-xs font-mono">
                         {item.tarikhMula ? (
                           <>
-                            <div className="text-slate-800 font-medium">{item.tarikhMula}</div>
-                            <div className="text-slate-400 text-[11px]">hingga {item.tarikhTamat}</div>
+                            <div className="text-slate-800 font-medium">
+                              {formatTarikhMY(item.tarikhMula)}
+                            </div>
+                            <div className="text-slate-400 text-[11px]">
+                              hingga {formatTarikhMY(item.tarikhTamat)}
+                            </div>
                           </>
                         ) : (
                           <span className="text-amber-700 italic text-[11px]">
@@ -681,7 +686,7 @@ export default function EjasSection({
 
                     <p className="text-[11px] text-slate-500 font-mono">
                       {item.tarikhMula
-                        ? `${item.tarikhMula} - ${item.tarikhTamat}`
+                        ? formatJulatTarikhMY(item.tarikhMula, item.tarikhTamat)
                         : 'Tarikh belum ditetapkan'}
                     </p>
 
@@ -735,7 +740,7 @@ export default function EjasSection({
 
                     <p className="text-[11px] text-slate-500 font-mono">
                       {item.tarikhMula
-                        ? `${item.tarikhMula} - ${item.tarikhTamat}`
+                        ? formatJulatTarikhMY(item.tarikhMula, item.tarikhTamat)
                         : 'Tarikh belum ditetapkan'}
                     </p>
 

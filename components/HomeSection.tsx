@@ -28,6 +28,7 @@ import {
 } from '@/components/charts/D3HomeCharts';
 import FullMonthCalendar from '@/components/calendar/FullMonthCalendar';
 import TakwimSesiCard from '@/components/TakwimSesiCard';
+import { formatTarikhMY } from '@/lib/tarikh';
 
 interface HomeSectionProps {
   schedules: InspectionSchedule[];
@@ -201,7 +202,7 @@ export default function HomeSection({
                       className="bg-slate-900 border border-rose-800/80 text-rose-200 text-[11px] px-2.5 py-1 rounded-xl font-mono font-medium flex items-center gap-1.5 shadow-2xs"
                     >
                       <Clock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                      <span><strong>{item.lokasi}</strong> ({item.jabatan}) &bull; Tamat: {item.tarikhTamat} ({item.overdueDays} hari)</span>
+                      <span><strong>{item.lokasi}</strong> ({item.jabatan}) &bull; Tamat: {formatTarikhMY(item.tarikhTamat)} ({item.overdueDays} hari)</span>
                     </span>
                   ))}
                   {overdueList.length > 3 && (
@@ -575,7 +576,7 @@ export default function HomeSection({
                         <div className="text-xs text-slate-600 space-y-1">
                           <div className="flex items-center gap-1.5 text-slate-600 font-mono">
                             <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>Tarikh Tamat: <strong className="text-slate-900">{item.tarikhTamat}</strong></span>
+                            <span>Tarikh Tamat: <strong className="text-slate-900">{formatTarikhMY(item.tarikhTamat)}</strong></span>
                           </div>
                           <div className="flex items-center gap-1.5 text-slate-600 font-mono">
                             <Boxes className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -669,8 +670,8 @@ export default function HomeSection({
                     </td>
 
                     <td className="py-2.5 px-3 font-mono text-slate-600">
-                      <div>{item.tarikhMula}</div>
-                      <div className="text-slate-400 text-[10px]">hingga {item.tarikhTamat}</div>
+                      <div>{formatTarikhMY(item.tarikhMula)}</div>
+                      <div className="text-slate-400 text-[10px]">hingga {formatTarikhMY(item.tarikhTamat)}</div>
                     </td>
 
                     <td className="py-2.5 px-3 text-slate-700">

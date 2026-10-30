@@ -31,6 +31,7 @@ import { useDepartments, useOfficers } from '@/lib/useReferenceData';
 import { deriveManageScope, canManageLocation } from '@/lib/manageScope';
 import { deriveKategoriRuang, parseKodLokasi } from '@/lib/kodLokasi';
 import { assetCsvFileName, buildAssetCsv, downloadCsv } from '@/lib/assetCsv';
+import { formatTarikhMY } from '@/lib/tarikh';
 import { dataApi } from '@/lib/dataApi';
 import type { AssetPayload } from '@/lib/dataApi';
 import { KEWPA7_EXTRACT_URL } from '@/lib/apiConfig';
@@ -871,7 +872,7 @@ export default function DirektoriLokasiSection({
                               </span>
                               {loc.tarikhTerakhirDiperiksa && (
                                 <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
-                                  {loc.tarikhTerakhirDiperiksa}
+                                  {formatTarikhMY(loc.tarikhTerakhirDiperiksa)}
                                 </span>
                               )}
                             </div>
