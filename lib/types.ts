@@ -16,7 +16,9 @@ export type KodStatusAset = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 export type PecahanStatus = Record<KodStatusAset, number>;
 
 export interface JustifikasiStatus {
-  sebab: string;
+  /** Ada dokumen sokongan? */
+  adaDokumen: boolean;
+  /** No. rujukan dokumen (pilihan). */
   rujukan?: string;
 }
 

@@ -748,11 +748,17 @@ export const schedulesRoute = new Hono<AppEnv>()
       if (body.laporanPraJkpak) {
         const report = body.laporanPraJkpak;
 
-        // Pecahan status fizikal A–F (KEW.PA-11) + justifikasi wajib bagi B–F.
-        const pecahan = normalizePecahan(report.pecahan);
+        // Bilangan aset ruang (KEW.PA-7) menentukan "Sedang Digunakan" (A) sebagai baki.
+        const assetCount = await c.env.DB.prepare(
+          'SELECT COUNT(*) AS total FROM assets WHERE location_id = ?'
+        )
+          .bind(current.location_id)
+          .first<{ total: number }>();
+
+        const pecahan = normalizePecahan(report.pecahan, Number(assetCount?.total) || 0);
         const justifikasi = (report.justifikasi ?? {}) as JustifikasiMap;
 
-        const ralat = validatePecahanStatus(pecahan, justifikasi);
+        const ralat = validatePecahanStatus(pecahan);
         if (ralat.length > 0) {
           return c.json(
             {

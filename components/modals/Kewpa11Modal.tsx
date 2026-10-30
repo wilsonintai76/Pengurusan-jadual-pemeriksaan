@@ -13,7 +13,8 @@ import { dataApi } from '@/lib/dataApi';
 import {
   PECAHAN_KOSONG,
   STATUS_ASET,
-  STATUS_WAJIB_JUSTIFIKASI,
+  STATUS_BERDOKUMEN,
+  hitungSedangDigunakan,
   jumlahPecahan,
   validatePecahanStatus,
 } from '@/lib/statusAset';
@@ -40,7 +41,6 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
   const [pecahan, setPecahan] = useState<PecahanStatus>(() => ({
     ...PECAHAN_KOSONG,
     ...(existing?.pecahan ?? {}),
-    A: existing?.pecahan?.A ?? existing?.baik ?? kuantiti,
   }));
   const [justifikasi, setJustifikasi] = useState<JustifikasiMap>(existing?.justifikasi ?? {});
   const [cadangan, setCadangan] = useState(
@@ -51,17 +51,23 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const jumlah = jumlahPecahan(pecahan);
+  // "Sedang Digunakan" dikira automatik sebagai baki aset.
+  const sedangDigunakan = hitungSedangDigunakan(kuantiti, pecahan);
+  const pecahanPenuh: PecahanStatus = { ...pecahan, A: sedangDigunakan };
+  const jumlah = jumlahPecahan(pecahanPenuh);
 
   const setBilangan = (kod: keyof PecahanStatus, nilai: string) => {
     const angka = Math.max(0, parseInt(nilai, 10) || 0);
     setPecahan((prev) => ({ ...prev, [kod]: angka }));
   };
 
-  const setJustifikasiField = (kod: keyof PecahanStatus, field: 'sebab' | 'rujukan', nilai: string) => {
+  const setDokumen = (kod: keyof PecahanStatus, patch: { adaDokumen?: boolean; rujukan?: string }) => {
     setJustifikasi((prev) => ({
       ...prev,
-      [kod]: { sebab: prev[kod]?.sebab ?? '', rujukan: prev[kod]?.rujukan ?? '', [field]: nilai },
+      [kod]: {
+        adaDokumen: patch.adaDokumen ?? prev[kod]?.adaDokumen ?? true,
+        rujukan: patch.rujukan ?? prev[kod]?.rujukan ?? '',
+      },
     }));
   };
 
@@ -87,7 +93,7 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const ralat: string[] = [...validatePecahanStatus(pecahan, justifikasi)];
+    const ralat: string[] = [...validatePecahanStatus(pecahanPenuh)];
 
     if (!docKey) {
       ralat.push('Sila muat naik borang KEW.PA-11 yang telah ditandatangani (PDF) ke Cloudflare R2.');
@@ -102,11 +108,11 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
     }
 
     const report: LaporanPraJkpak = {
-      baik: pecahan.A + pecahan.E,
-      rosak: pecahan.C + pecahan.D,
-      usang: pecahan.B,
-      hilang: pecahan.F,
-      pecahan,
+      baik: pecahanPenuh.A + pecahanPenuh.E,
+      rosak: pecahanPenuh.C + pecahanPenuh.D,
+      usang: pecahanPenuh.B,
+      hilang: pecahanPenuh.F,
+      pecahan: pecahanPenuh,
       justifikasi,
       cadangan: cadangan.trim(),
       tarikhHantar: new Date().toISOString().slice(0, 10),
@@ -188,100 +194,107 @@ export default function Kewpa11Modal({ schedule, onClose, onSubmit }: Kewpa11Mod
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {STATUS_ASET.map((status) => (
-                <div
-                  key={status.kod}
-                  className={`p-3 rounded-xl border ${WARNA_KAD[status.kod]}`}
-                >
-                  <label className="block font-bold text-xs mb-1">
-                    {status.kod}. {status.label}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={pecahan[status.kod]}
-                    onChange={(e) => setBilangan(status.kod, e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono font-bold text-sm bg-white text-slate-900"
-                  />
-                  {status.dokumen && pecahan[status.kod] > 0 && (
-                    <span className="mt-1 block text-[9px] font-semibold leading-tight opacity-80">
-                      Wajib: {status.dokumen}
-                    </span>
-                  )}
-                </div>
-              ))}
+              {STATUS_ASET.map((status) => {
+                const auto = Boolean(status.auto);
+                const nilai = auto ? sedangDigunakan : pecahan[status.kod];
+                return (
+                  <div
+                    key={status.kod}
+                    className={`p-3 rounded-xl border ${WARNA_KAD[status.kod]}`}
+                  >
+                    <label className="block font-bold text-xs mb-1">
+                      {status.kod}. {status.label}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      readOnly={auto}
+                      value={nilai}
+                      onChange={(e) => setBilangan(status.kod, e.target.value)}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-sm ${
+                        auto
+                          ? 'border-emerald-300 bg-emerald-100/70 text-emerald-900 cursor-not-allowed'
+                          : 'border-slate-300 bg-white text-slate-900'
+                      }`}
+                    />
+                    {auto ? (
+                      <span className="mt-1 block text-[9px] font-semibold leading-tight opacity-80">
+                        Dikira automatik: {kuantiti} − status lain
+                      </span>
+                    ) : (
+                      status.dokumen && (
+                        <span className="mt-1 block text-[9px] font-semibold leading-tight opacity-80">
+                          {status.dokumen}: Ada / Tiada
+                        </span>
+                      )
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {jumlah !== kuantiti && (
+            {jumlah < kuantiti && (
               <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-900">
                 <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                Jumlah status ({jumlah}) tidak sama dengan bilangan aset berdaftar ({kuantiti} unit).
-                Pemeriksaan 100% sepatutnya meliputi semua aset ruang ini.
+                Jumlah status lain melebihi bilangan aset berdaftar ({kuantiti} unit) — nilai Sedang
+                Digunakan ditetapkan 0.
               </p>
             )}
           </div>
 
-          {/* 2. Justifikasi & dokumen sokongan bagi B–F */}
-          {STATUS_WAJIB_JUSTIFIKASI.filter((kod) => pecahan[kod] > 0).map((kod) => {
+          {/* 2. Dokumen sokongan Ada/Tiada bagi C–F */}
+          {STATUS_BERDOKUMEN.filter((kod) => pecahan[kod] > 0).map((kod) => {
             const meta = STATUS_ASET.find((status) => status.kod === kod)!;
-            const nilai = justifikasi[kod] ?? { sebab: '', rujukan: '' };
-            const rujukanWajib = kod === 'C' || kod === 'D' || kod === 'E';
+            const ada = justifikasi[kod]?.adaDokumen ?? true;
+            const rujukan = justifikasi[kod]?.rujukan ?? '';
 
             return (
               <div key={kod} className="border border-slate-200 rounded-2xl p-4 bg-slate-50/60 space-y-2">
                 <h4 className="font-bold text-slate-800 text-xs">
                   {kod}. {meta.label} — {pecahan[kod]} aset{' '}
-                  <span className="font-normal text-slate-500">(justifikasi wajib)</span>
+                  <span className="font-normal text-slate-500">({meta.dokumen})</span>
                 </h4>
 
-                {meta.cadangan && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {meta.cadangan.map((cadang) => (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-600">Dokumen:</span>
+                  <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+                    {[
+                      { label: `Ada ${meta.dokumen}`, value: true },
+                      { label: `Tiada ${meta.dokumen}`, value: false },
+                    ].map((pilihan) => (
                       <button
-                        key={cadang}
+                        key={String(pilihan.value)}
                         type="button"
-                        onClick={() => setJustifikasiField(kod, 'sebab', cadang)}
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${
-                          nilai.sebab === cadang
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                        onClick={() => setDokumen(kod, { adaDokumen: pilihan.value })}
+                        className={`px-2.5 py-1 text-[10px] font-bold transition ${
+                          ada === pilihan.value
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-white text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        {cadang}
+                        {pilihan.label}
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
 
-                <textarea
-                  rows={2}
-                  value={nilai.sebab}
-                  onChange={(e) => setJustifikasiField(kod, 'sebab', e.target.value)}
-                  placeholder={`Justifikasi / sebab bagi status ${meta.label}…`}
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
-                />
-
-                <div>
-                  <label className="mb-0.5 block text-[10px] font-bold text-slate-600">
-                    {meta.dokumen}
-                    {rujukanWajib && <span className="text-rose-500"> *</span>}
-                  </label>
+                {ada && (
                   <input
                     type="text"
-                    value={nilai.rujukan ?? ''}
-                    onChange={(e) => setJustifikasiField(kod, 'rujukan', e.target.value)}
+                    value={rujukan}
+                    onChange={(e) => setDokumen(kod, { rujukan: e.target.value })}
                     placeholder={
                       kod === 'C'
-                        ? 'cth: ADU/JKM/2026/012'
+                        ? 'No. laporan: cth ADU/JKM/2026/012'
                         : kod === 'D'
-                          ? 'cth: LPO/PKU/2026/P1088'
+                          ? 'No. LPO: cth LPO/PKU/2026/P1088'
                           : kod === 'E'
-                            ? 'cth: PINJAM/JTMK/2026/07'
-                            : 'cth: LAPORAN POLIS/PKU/2026/0031'
+                            ? 'No. borang pinjaman: cth PINJAM/JTMK/2026/07'
+                            : 'No. laporan polis: cth LP/PKU/2026/0031'
                     }
                     className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono bg-white"
                   />
-                </div>
+                )}
               </div>
             );
           })}

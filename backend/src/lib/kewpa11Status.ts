@@ -3,40 +3,31 @@ export type KodStatusAset = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 export interface StatusAsetMeta {
   kod: KodStatusAset;
   label: string;
-  /** Dokumen sokongan wajib bagi status ini (null = tiada). */
+  /** Jenis dokumen sokongan yang direkodkan Ada/Tiada (null = tiada dokumen). */
   dokumen: string | null;
-  /** Cadangan justifikasi pantas untuk dipilih pengguna. */
-  cadangan?: string[];
+  /** Bilangan status ini dikira automatik (A = baki aset). */
+  auto?: boolean;
 }
 
 /** Enam status fizikal aset semasa pemeriksaan (KEW.PA-11). */
 export const STATUS_ASET: StatusAsetMeta[] = [
-  { kod: 'A', label: 'Sedang Digunakan', dokumen: null },
-  {
-    kod: 'B',
-    label: 'Tidak Digunakan',
-    dokumen: 'Justifikasi sebab tidak digunakan',
-    cadangan: [
-      'Tiada dalam silibus / tidak lagi digunakan',
-      'Aset lapuk (teknologi usang)',
-      'Melebihi keperluan unit',
-      'Ralat perolehan / tidak sesuai dengan keperluan',
-      'Rosak tidak ekonomik untuk dibaiki',
-    ],
-  },
-  { kod: 'C', label: 'Perlu Pembaikan', dokumen: 'No. laporan kerosakan' },
-  { kod: 'D', label: 'Sedang Diselenggara', dokumen: 'No. LPO / pesanan kerja' },
-  { kod: 'E', label: 'Pinjaman', dokumen: 'No. borang pinjaman' },
-  { kod: 'F', label: 'Hilang', dokumen: 'No. laporan polis (jika ada)' },
+  { kod: 'A', label: 'Sedang Digunakan', dokumen: null, auto: true },
+  { kod: 'B', label: 'Tidak Digunakan', dokumen: null },
+  { kod: 'C', label: 'Perlu Pembaikan', dokumen: 'Laporan kerosakan' },
+  { kod: 'D', label: 'Sedang Diselenggara', dokumen: 'LPO / pesanan kerja' },
+  { kod: 'E', label: 'Pinjaman', dokumen: 'Borang pinjaman' },
+  { kod: 'F', label: 'Hilang', dokumen: 'Laporan polis' },
 ];
 
-/** Status yang WAJIB ada justifikasi apabila bilangannya > 0. */
-export const STATUS_WAJIB_JUSTIFIKASI: KodStatusAset[] = ['B', 'C', 'D', 'E', 'F'];
+/** Status yang merekodkan dokumen sokongan Ada/Tiada. */
+export const STATUS_BERDOKUMEN: KodStatusAset[] = ['C', 'D', 'E', 'F'];
 
 export type PecahanStatus = Record<KodStatusAset, number>;
 
 export interface JustifikasiStatus {
-  sebab: string;
+  /** Ada dokumen sokongan? */
+  adaDokumen: boolean;
+  /** No. rujukan dokumen (pilihan). */
   rujukan?: string;
 }
 
@@ -49,15 +40,27 @@ function nombor(nilai: unknown): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
-/** Normalisasi input pelanggan kepada 6 kod A–F. */
-export function normalizePecahan(input?: Partial<PecahanStatus> | null): PecahanStatus {
-  return {
-    A: nombor(input?.A),
+/**
+ * Normalisasi input pelanggan kepada 6 kod A–F. Bilangan "Sedang Digunakan" (A)
+ * sentiasa dikira sebagai baki daripada jumlah aset berdaftar ruang itu.
+ */
+export function normalizePecahan(
+  input?: Partial<PecahanStatus> | null,
+  kuantiti?: number
+): PecahanStatus {
+  const lain = {
     B: nombor(input?.B),
     C: nombor(input?.C),
     D: nombor(input?.D),
     E: nombor(input?.E),
     F: nombor(input?.F),
+  };
+  const jumlahLain = lain.B + lain.C + lain.D + lain.E + lain.F;
+  const jumlahAset = nombor(kuantiti);
+
+  return {
+    A: Math.max(jumlahAset - jumlahLain, 0),
+    ...lain,
   };
 }
 
@@ -65,43 +68,12 @@ export function jumlahPecahan(pecahan: PecahanStatus): number {
   return STATUS_ASET.reduce((sum, status) => sum + (pecahan[status.kod] || 0), 0);
 }
 
-/**
- * Semak peraturan KEW.PA-11: setiap status B–F yang ada aset mesti mempunyai
- * justifikasi, dan dokumen sokongan mengikut jenis status.
- */
-export function validatePecahanStatus(
-  pecahan: PecahanStatus,
-  justifikasi: JustifikasiMap = {}
-): string[] {
+/** Semakan minimum: mesti ada sekurang-kurangnya satu aset diperiksa. */
+export function validatePecahanStatus(pecahan: PecahanStatus): string[] {
   const ralat: string[] = [];
-
   if (jumlahPecahan(pecahan) <= 0) {
     ralat.push('Jumlah aset diperiksa tidak boleh sifar.');
   }
-
-  for (const kod of STATUS_WAJIB_JUSTIFIKASI) {
-    if ((pecahan[kod] || 0) <= 0) continue;
-
-    const meta = STATUS_ASET.find((status) => status.kod === kod);
-    const sebab = String(justifikasi[kod]?.sebab ?? '').trim();
-    const rujukan = String(justifikasi[kod]?.rujukan ?? '').trim();
-
-    if (!sebab) {
-      ralat.push(
-        `Status ${kod} (${meta?.label ?? kod}): ${pecahan[kod]} aset — justifikasi wajib diisi.`
-      );
-    }
-    if (kod === 'C' && !rujukan) {
-      ralat.push('Status C (Perlu Pembaikan): no. laporan kerosakan wajib diisi.');
-    }
-    if (kod === 'D' && !rujukan) {
-      ralat.push('Status D (Sedang Diselenggara): no. LPO / pesanan kerja wajib diisi.');
-    }
-    if (kod === 'E' && !rujukan) {
-      ralat.push('Status E (Pinjaman): no. borang pinjaman wajib diisi.');
-    }
-  }
-
   return ralat;
 }
 

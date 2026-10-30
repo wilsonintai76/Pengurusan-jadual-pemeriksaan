@@ -439,20 +439,19 @@ Backfill `officers.peranan → role_assignments`:
 
 ### Status fizikal aset A–F (KEW.PA-11)
 
-| Kod | Status | Dokumen sokongan wajib bila > 0 |
+| Kod | Status | Rekod sokongan bila > 0 |
 |---|---|---|
-| A | Sedang Digunakan | — |
-| B | Tidak Digunakan | Justifikasi (pilihan pantas: tiada dalam silibus, aset lapuk, melebihi keperluan, ralat perolehan, tidak ekonomik dibaiki) |
-| C | Perlu Pembaikan | Justifikasi + **no. laporan kerosakan** |
-| D | Sedang Diselenggara | Justifikasi + **no. LPO / pesanan kerja** |
-| E | Pinjaman | Justifikasi + **no. borang pinjaman** |
-| F | Hilang | Justifikasi (+ no. laporan polis jika ada) |
+| A | Sedang Digunakan | **Dikira automatik** = `kuantiti aset ruang − (B+C+D+E+F)`; medan baca-sahaja |
+| B | Tidak Digunakan | Tiada justifikasi tambahan diperlukan |
+| C | Perlu Pembaikan | Toggle **Ada / Tiada laporan kerosakan** (+ no. rujukan jika ada) |
+| D | Sedang Diselenggara | Toggle **Ada / Tiada LPO / pesanan kerja** (+ no. rujukan) |
+| E | Pinjaman | Toggle **Ada / Tiada borang pinjaman** (+ no. rujukan) |
+| F | Hilang | Toggle **Ada / Tiada laporan polis** (+ no. rujukan) |
 
-Semua status B–F mewajibkan justifikasi. Peraturan disemak **dua lapis**: klien
-([`lib/statusAset.ts`](lib/statusAset.ts)) dan Worker ([`backend/src/lib/kewpa11Status.ts`](backend/src/lib/kewpa11Status.ts))
-yang memulangkan `400 INVALID_STATUS_JUSTIFICATION` bersama senarai ralat. Pecahan penuh disimpan sebagai
-JSON dalam `inspection_reports.pecahan_status` / `justifikasi_status` (migrasi
-`backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
+Bilangan A sentiasa diselaraskan: klien mengira semula pada setiap perubahan dan Worker mengira semula
+daripada `COUNT(assets)` ruang itu sebelum menyimpan (`pecahan.A` yang dihantar pelanggan diabaikan).
+Pecahan penuh disimpan sebagai JSON dalam `inspection_reports.pecahan_status` / `justifikasi_status`
+(migrasi `backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
 Pra-JKPAK dipetakan: `baik = A + E`, `rosak = C + D`, `usang = B`, `hilang = F`.
 
 ## Pemisahan Tugas & Notifikasi Luput
