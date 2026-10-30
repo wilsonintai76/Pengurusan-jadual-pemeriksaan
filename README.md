@@ -280,12 +280,12 @@ Paparan senarai jadual turut membantu pemeriksa:
   (Bil, No. Rujukan, Jabatan & Lokasi, **Siri**, Kategori & Unit, Tarikh Rancangan, Pemeriksa, Status)
   dengan butang **Cetak**; CSS cetakan menyembunyikan chrome modal supaya dokumen tidak terpotong.
   Butang *Cetak Kertas Pembentangan* dalam Kompilasi Pra-JKPAK menggunakan pratonton yang sama.
-- **Tugasan Saya** — penapis dengan **dua kiraan berasingan**: *Pemeriksaan* (jadual yang saya menjadi
-  Pemeriksa 1/2) dan *Penyeliaan* (jadual bagi ruang yang saya selia). Penyeliaan merangkumi **mana-mana**
-  pegawai dalam `location_custodians` ruang itu, bukan hanya penyelia utama. Padanan menggunakan **e-mel**
-  (nama hanya sandaran apabila medan e-mel pada jadual kosong). Logik di
-  [`lib/tugasanSaya.ts`](lib/tugasanSaya.ts) (diuji); `penjagaSenarai` pada `v_schedules_full` membawa
-  `nama||telefon||emel` untuk tujuan ini.
+- **Tugasan Saya** — penapis gabungan: satu angka bagi jadual yang saya menjadi **Pemeriksa 1/2**
+  *atau* ruang yang saya selia sebagai **Penyelia Lokasi** (jadual yang saya pemeriksa bagi ruang sendiri
+  dikira sekali sahaja). Penyeliaan merangkumi **mana-mana** pegawai dalam `location_custodians` ruang itu,
+  bukan hanya penyelia utama. Padanan menggunakan **e-mel** (nama hanya sandaran apabila medan e-mel pada
+  jadual kosong). Logik di [`lib/tugasanSaya.ts`](lib/tugasanSaya.ts) (diuji); `penjagaSenarai` pada
+  `v_schedules_full` membawa `nama||telefon||emel` untuk tujuan ini.
 
 Kekangan yang dikuatkuasakan:
 

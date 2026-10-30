@@ -207,6 +207,7 @@ export default function EjasSection({
         <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
           <button
             onClick={() => setFilterMyTasksOnly(!filterMyTasksOnly)}
+            title={`Jadual yang saya periksa atau ruang yang saya selia — ${tugasanSaya.pemeriksaan} pemeriksaan + ${tugasanSaya.penyeliaan} penyeliaan`}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 ${
               filterMyTasksOnly
                 ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
@@ -214,23 +215,7 @@ export default function EjasSection({
             }`}
           >
             <CalendarCheck2 className="w-3.5 h-3.5" />
-            <span>Tugasan Saya</span>
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                filterMyTasksOnly ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-900'
-              }`}
-              title="Jadual yang saya sebagai Pegawai Pemeriksa"
-            >
-              Pemeriksaan {tugasanSaya.pemeriksaan}
-            </span>
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                filterMyTasksOnly ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-900'
-              }`}
-              title="Jadual bagi ruang yang saya selia sebagai Penyelia Lokasi"
-            >
-              Penyeliaan {tugasanSaya.penyeliaan}
-            </span>
+            <span>Tugasan Saya ({tugasanSaya.jumlah})</span>
           </button>
 
           {/* Pada desktop, butang ini sudah ada di TopHeader — papar di sini hanya untuk skrin kecil. */}
