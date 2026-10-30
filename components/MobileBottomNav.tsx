@@ -155,23 +155,6 @@ export default function MobileBottomNav({
             {/* Secondary Navigation Options — kumpulan sama seperti sidebar */}
             <div className="space-y-2">
               <span className="block px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Pemeriksaan
-              </span>
-
-              <button
-                onClick={() => handleTabSelect('kitaran')}
-                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                  activeTab === 'kitaran' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <ArrowLeftRight className="w-4 h-4 text-sky-600" />
-                  <span>Kitaran Pemeriksaan</span>
-                </div>
-                <span className="text-[10px] text-sky-700 font-mono">Kolam</span>
-              </button>
-
-              <span className="block px-1 pt-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Direktori
               </span>
 
@@ -236,6 +219,19 @@ export default function MobileBottomNav({
                   <span className="block px-1 pt-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Pentadbiran
                   </span>
+
+                  <button
+                    onClick={() => handleTabSelect('kitaran')}
+                    className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                      activeTab === 'kitaran' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <ArrowLeftRight className="w-4 h-4 text-sky-600" />
+                      <span>Kitaran Pemeriksaan</span>
+                    </div>
+                    <span className="text-[10px] text-sky-700 font-mono">Kolam</span>
+                  </button>
 
                   <button
                     onClick={() => handleTabSelect('audit')}

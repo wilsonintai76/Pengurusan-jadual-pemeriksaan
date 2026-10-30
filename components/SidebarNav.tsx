@@ -86,14 +86,6 @@ export default function SidebarNav({
           description: 'Pemeriksaan 100%',
         },
         {
-          id: 'kitaran',
-          label: 'Kitaran Pemeriksaan',
-          icon: ArrowLeftRight,
-          badge: null,
-          description: 'Kolam & Timbal Balik',
-          adminOnly: true,
-        },
-        {
           id: 'praJkpak',
           label: 'Kompilasi Pra-JKPAK',
           icon: FileSignature,
@@ -146,6 +138,14 @@ export default function SidebarNav({
       label: 'Pentadbiran',
       adminOnly: true,
       items: [
+        {
+          id: 'kitaran',
+          label: 'Kitaran Pemeriksaan',
+          icon: ArrowLeftRight,
+          badge: null,
+          description: 'Kolam & Timbal Balik',
+          adminOnly: true,
+        },
         {
           id: 'audit',
           label: 'Jejak Audit PBAC',
