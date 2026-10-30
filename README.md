@@ -135,9 +135,13 @@ dan **tidak boleh** memaparkan peranan yang tiada lantikan aktif:
 | Daftar lokasi baharu | Semua jabatan | Jabatan sendiri sahaja | Tidak (`403 DEPARTMENT_FORBIDDEN`) |
 | Kemaskini lokasi (termasuk penjaga & aset KEW.PA-7) | Semua jabatan | Jabatan sendiri sahaja | **Ruang yang diselia sahaja** |
 | Padam lokasi | Ya | Tidak | Tidak |
-| Daftar pegawai baharu (akaun + kredensial) | Ya | Tidak (`403`) | Tidak (`403`) |
+| Daftar pegawai baharu (akaun + kredensial) | Ya | **Jabatan sendiri sahaja** (`403 DEPARTMENT_FORBIDDEN`) | Tidak (`403`) |
+| Kemaskini maklumat pegawai (termasuk no. telefon penyelia) | Ya | **Jabatan sendiri sahaja** | Tidak (`403`) |
+| Padam pegawai | Ya | Tidak | Tidak |
 | Daftar pegawai ke direktori sahaja (tanpa akaun) | Ya | **Jabatan sendiri sahaja** (`POST /api/officers/directory`) | Tidak |
 | Lantikan (Peranan & Lantikan) | Ya | Tidak | Tidak |
+| Menu **Kitaran Pemeriksaan**, **Jejak Audit PBAC**, **Tetapan** | Ya | Disembunyikan + panel *Akses Ditolak* | Sama |
+| `GET /api/audit-logs` | Ya | `403` | `403` |
 
 Skop ditentukan oleh lantikan aktif `role_assignments` melalui
 [`backend/src/lib/permissions.ts`](backend/src/lib/permissions.ts) dan disemak di pelayan, bukan hanya di UI:

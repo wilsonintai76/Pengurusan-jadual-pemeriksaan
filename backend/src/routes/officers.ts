@@ -6,9 +6,29 @@ import {
   generateUniqueUsername,
   issueCredentials,
 } from '../lib/credentials';
-import { DEFAULT_JAWATAN_ID, assignDefaultRoleForOfficer, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
+import { DEFAULT_JAWATAN_ID, assignDefaultRoleForOfficer, hasActiveRole, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
 import { getAuthUser, requireRole, type AppEnv } from '../middleware/auth';
 import { canManageDepartment, loadManageScope } from '../lib/permissions';
+import type { DB } from '../lib/db';
+
+/**
+ * Pendaftaran/kemaskini pegawai: Pentadbir Sistem (semua jabatan) atau
+ * Penolong Pegawai Aset (PPAJ/PPAU) bagi jabatan dalam skopnya sahaja.
+ */
+async function bolehUrusPegawaiJabatan(
+  db: DB,
+  auth: { id: string } | null,
+  departmentId: string
+): Promise<boolean> {
+  if (!auth) return false;
+  if (await hasActiveRole(db, auth.id, 'PENTADBIR_SISTEM')) return true;
+
+  const pembantuAset = await hasActiveRole(db, auth.id, 'PENOLONG_PEGAWAI_ASET');
+  if (!pembantuAset) return false;
+
+  const scope = await loadManageScope(db, auth.id);
+  return scope.departmentIds.includes(departmentId);
+}
 
 const OFFICER_SELECT = `
   SELECT
@@ -116,8 +136,9 @@ export const officersRoute = new Hono<AppEnv>()
     }
   })
 
-  // 2. DAFTAR PEGAWAI + JANA NAMA PENGGUNA & KATA LALUAN (Pentadbir Sistem sahaja)
-  .post('/', requireRole('PENTADBIR_SISTEM'), async (c) => {
+  // 2. DAFTAR PEGAWAI + JANA NAMA PENGGUNA & KATA LALUAN
+  //    Pentadbir Sistem (semua jabatan) atau PPAJ/PPAU (jabatan sendiri).
+  .post('/', async (c) => {
     try {
       const body = await c.req.json();
 
@@ -159,6 +180,19 @@ export const officersRoute = new Hono<AppEnv>()
         );
       }
       const departmentId = department.departmentId;
+
+      const auth = getAuthUser(c);
+      if (!(await bolehUrusPegawaiJabatan(c.env.DB, auth, departmentId))) {
+        return c.json(
+          {
+            success: false,
+            code: 'DEPARTMENT_FORBIDDEN',
+            message:
+              'Akses ditolak: anda hanya boleh mendaftar pegawai bagi jabatan/unit anda sendiri.',
+          },
+          403
+        );
+      }
 
       // Emel pilihan: jika pentadbir beri emel rasmi, guna; jika tidak, jana daripada nama.
       const requestedEmail = String(body.emel ?? body.email ?? '').trim().toLowerCase();
@@ -448,7 +482,7 @@ export const officersRoute = new Hono<AppEnv>()
     }
   })
 
-  // 3. UPDATE OFFICER (by id or e-mail)
+  // 3. UPDATE OFFICER (by id or e-mail) — Pentadbir Sistem atau PPAJ/PPAU jabatan itu
   .put('/:id', async (c) => {
     const identifier = c.req.param('id');
 
@@ -456,13 +490,25 @@ export const officersRoute = new Hono<AppEnv>()
       const body = await c.req.json();
 
       const current = await c.env.DB.prepare(
-        'SELECT id, peranan FROM officers WHERE id = ? OR emel = ? COLLATE NOCASE LIMIT 1'
+        'SELECT id, peranan, department_id AS departmentId FROM officers WHERE id = ? OR emel = ? COLLATE NOCASE LIMIT 1'
       )
         .bind(identifier, identifier)
-        .first<{ id: string; peranan: string }>();
+        .first<{ id: string; peranan: string; departmentId: string }>();
 
       if (!current) {
         return c.json({ success: false, message: 'Pegawai tidak dijumpai' }, 404);
+      }
+
+      const auth = getAuthUser(c);
+      if (!(await bolehUrusPegawaiJabatan(c.env.DB, auth, current.departmentId))) {
+        return c.json(
+          {
+            success: false,
+            code: 'DEPARTMENT_FORBIDDEN',
+            message: 'Akses ditolak: anda hanya boleh mengemas kini pegawai jabatan/unit anda sendiri.',
+          },
+          403
+        );
       }
 
       const assignments: string[] = [];
@@ -510,6 +556,17 @@ export const officersRoute = new Hono<AppEnv>()
         if (!departmentId) {
           return c.json({ success: false, message: `Jabatan '${body.dept}' tidak dijumpai` }, 400);
         }
+        // Pindah jabatan juga perlu dalam skop PPAJ/PPAU.
+        if (!(await bolehUrusPegawaiJabatan(c.env.DB, getAuthUser(c), departmentId))) {
+          return c.json(
+            {
+              success: false,
+              code: 'DEPARTMENT_FORBIDDEN',
+              message: 'Akses ditolak: jabatan sasaran di luar skop anda.',
+            },
+            403
+          );
+        }
         set('department_id', departmentId);
       }
 
@@ -535,8 +592,8 @@ export const officersRoute = new Hono<AppEnv>()
     }
   })
 
-  // 4. DELETE OFFICER
-  .delete('/:id', async (c) => {
+  // 4. DELETE OFFICER — Pentadbir Sistem sahaja
+  .delete('/:id', requireRole('PENTADBIR_SISTEM'), async (c) => {
     const identifier = c.req.param('id');
 
     try {

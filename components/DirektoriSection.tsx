@@ -44,6 +44,11 @@ interface DirektoriSectionProps {
   onUpdateUser?: (user: UserSession) => void;
   onDeleteUser?: (userEmail: string) => void;
   canManage?: boolean;
+  /**
+   * Jabatan yang boleh didaftar/dikemas kini oleh PPAJ/PPAU (skop lantikan sendiri).
+   * Pentadbir Sistem tidak memerlukan senarai ini.
+   */
+  jabatanDiurus?: string[];
   /** Senarai jabatan & lokasi untuk pengurusan lantikan (sub-tab). */
   departments?: DepartmentInfo[];
   locations?: LocationInfo[];
@@ -124,11 +129,17 @@ export default function DirektoriSection({
   onUpdateUser,
   onDeleteUser,
   canManage = false,
+  jabatanDiurus = [],
   departments: departmentsProp,
   locations = [],
   onShowToast,
   onRolesChanged,
 }: DirektoriSectionProps) {
+  /** PPAJ/PPAU boleh urus pegawai jabatan sendiri (daftar/kemaskini sahaja). */
+  const bolehDaftarPegawai = canManage || jabatanDiurus.length > 0;
+  const bolehKemaskiniPegawai = (dept?: string) =>
+    canManage || (Boolean(dept) && jabatanDiurus.includes(String(dept)));
+
   const [issued, setIssued] = useState<IssuedCredentials | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [issuedFor, setIssuedFor] = useState<string>('');
@@ -459,11 +470,11 @@ export default function DirektoriSection({
               <span>Eksport CSV</span>
             </button>
 
-            {canManage && (
+            {bolehDaftarPegawai && (
               <button
                 onClick={handleOpenAddModal}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition flex items-center gap-2 shadow-xs"
-                title="Akaun pegawai didaftarkan oleh Pentadbir Sistem — kredensial dijana automatik"
+                title="Akaun pegawai didaftarkan oleh Pentadbir Sistem atau PPAJ/PPAU (jabatan sendiri) — kredensial dijana automatik"
               >
                 <Plus className="w-4 h-4 text-amber-400" />
                 <span>Daftar Pegawai Baru</span>
@@ -836,8 +847,8 @@ export default function DirektoriSection({
                                 <Eye className="w-4 h-4" />
                               </button>
 
-                              {/* Edit button */}
-                              {canManage && (
+                              {/* Edit button — pentadbir atau PPAJ/PPAU bagi jabatan sendiri */}
+                              {bolehKemaskiniPegawai(user.dept) && (
                                 <button
                                   onClick={() => handleOpenEditModal(user)}
                                   className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition"

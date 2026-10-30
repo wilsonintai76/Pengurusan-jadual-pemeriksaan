@@ -91,6 +91,7 @@ export default function SidebarNav({
           icon: ArrowLeftRight,
           badge: null,
           description: 'Kolam & Timbal Balik',
+          adminOnly: true,
         },
         {
           id: 'praJkpak',

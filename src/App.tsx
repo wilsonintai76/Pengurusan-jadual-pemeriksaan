@@ -185,6 +185,25 @@ export default function App() {
     );
   }, [myAssignments, currentUser?.role]);
 
+  /** Jabatan yang boleh didaftar/dikemas kini pegawai oleh PPAJ/PPAU (skop sendiri). */
+  const jabatanDiurusPegawai = useMemo(() => {
+    if (isSystemAdmin) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    const aktif = (assignment: RoleAssignment) =>
+      assignment.status === 'AKTIF' &&
+      (!assignment.validFrom || assignment.validFrom <= today) &&
+      (!assignment.validTo || assignment.validTo >= today);
+
+    return Array.from(
+      new Set(
+        myAssignments
+          .filter((assignment) => assignment.roleId === 'PENOLONG_PEGAWAI_ASET' && aktif(assignment))
+          .filter((assignment) => assignment.scopeType === 'DEPARTMENT' && assignment.scopeId)
+          .map((assignment) => assignment.scopeId as string)
+      )
+    );
+  }, [isSystemAdmin, myAssignments]);
+
   /**
    * Laporan KEW.PA-11 hanya boleh diisi oleh Pegawai Pemeriksa yang ditugaskan
    * (atau Pentadbir Sistem); pengguna lain hanya boleh melihat (baca-sahaja).
@@ -908,6 +927,7 @@ export default function App() {
               currentUser={currentUser}
               users={users}
               canManage={isSystemAdmin}
+              jabatanDiurus={jabatanDiurusPegawai}
               onCreateOfficer={async (input) => {
                 const result = await dataApi.officers.createAccount(input);
                 setUsers((prev) => [result.officer, ...prev]);
@@ -944,7 +964,7 @@ export default function App() {
           )}
 
 
-          {activeTab === 'kitaran' && (
+          {activeTab === 'kitaran' && isSystemAdmin && (
             <KitaranSection
               officers={users}
               departments={departments}
@@ -952,6 +972,25 @@ export default function App() {
               canManage={isSystemAdmin}
               onShowToast={showToast}
             />
+          )}
+
+          {activeTab === 'kitaran' && !isSystemAdmin && (
+            <div className="bg-white rounded-2xl border border-rose-200 shadow-2xs p-8 text-center space-y-3">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                <ShieldCheck className="w-6 h-6 text-rose-600" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">Akses Ditolak</h3>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Menu <strong>Kitaran Pemeriksaan</strong> hanya boleh diakses oleh pegawai dengan lantikan{' '}
+                <span className="font-mono">PENTADBIR_SISTEM</span>.
+              </p>
+              <button
+                onClick={() => setActiveTab('home')}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
+              >
+                Kembali ke Utama
+              </button>
+            </div>
           )}
 
           {activeTab === 'audit' && isSystemAdmin && <AuditLogSection logs={auditLogs} />}
