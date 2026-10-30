@@ -10,3 +10,8 @@ coverage/
 !.env.example
 !.env.production
 backup-*.sql
+
+# wrangler dry-run bundle & local state
+backend/.wrangler-dryrun/
+.wrangler-dryrun/
+
