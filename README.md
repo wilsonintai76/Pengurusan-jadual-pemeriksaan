@@ -479,6 +479,15 @@ Pecahan penuh disimpan sebagai JSON dalam `inspection_reports.pecahan_status` / 
 (migrasi `backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
 Pra-JKPAK dipetakan: `baik = A + E`, `rosak = C + D`, `usang = B`, `hilang = F`.
 
+**Penjanaan Kompilasi Pra-JKPAK** membaca `pecahan` + `justifikasi` daripada laporan yang sama (bukan
+medan warisan 4 kategori) melalui [`lib/praJkpak.ts`](lib/praJkpak.ts) (diuji):
+
+- KPI & rumusan jabatan memaparkan **enam status A–F** (Pinjaman/E tidak lagi dilebur ke "Aset Baik").
+- Dokumen sokongan C–F dipaparkan dengan **Ada/Tiada + no. rujukan**; status B dengan **sebab piawai**.
+- Digunakan serentak oleh halaman Pra-JKPAK, **Kertas Pembentangan** (cetakan) dan **Eksport CSV** —
+  ketiga-tiganya kini selaras dengan KEW.PA-11.
+- Rekod lama tanpa `pecahan` dipetakan `baik→A`, `usang→B`, `rosak→C`, `hilang→F` (ditandakan warisan).
+
 ## Pemisahan Tugas & Notifikasi Luput
 
 ### Pengesahan dapatan (separation of duties)

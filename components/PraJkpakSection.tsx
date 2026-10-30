@@ -13,6 +13,13 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { InspectionSchedule } from '@/lib/types';
+import {
+  JENIS_DOKUMEN,
+  LABEL_STATUS,
+  ringkasLaporan,
+  teksDokumen,
+  type RingkasanPraJkpak,
+} from '@/lib/praJkpak';
 
 interface PraJkpakSectionProps {
   schedules: InspectionSchedule[];
@@ -30,32 +37,16 @@ export default function PraJkpakSection({
   );
 
   const totLokasi = selesaiData.length;
-  let totBaik = 0;
-  let totRosak = 0;
-  let totUsang = 0;
-  let totHilang = 0;
+  /** Jumlah setiap status A–F — terus daripada KEW.PA-11 (bukan 4 kategori warisan). */
+  const totPecahan = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  let totAset = 0;
 
   // Group by department
   interface DeptGroup {
     lokasiList: InspectionSchedule[];
-    baik: number;
-    rosak: number;
-    usang: number;
-    hilang: number;
-    loList: Array<{
-      lokasi: string;
-      bil: number;
-      aduan: string;
-      lo: string;
-      status: string;
-    }>;
-    usangList: Array<{
-      lokasi: string;
-      bil: number;
-      sebab: string;
-      justifikasi: string;
-      syor: string;
-    }>;
+    ringkasan: RingkasanPraJkpak[];
+    pecahan: typeof totPecahan;
+    jumlahAset: number;
   }
 
   const deptGroups: Record<string, DeptGroup> = {};
@@ -65,49 +56,53 @@ export default function PraJkpakSection({
     if (!deptGroups[d]) {
       deptGroups[d] = {
         lokasiList: [],
-        baik: 0,
-        rosak: 0,
-        usang: 0,
-        hilang: 0,
-        loList: [],
-        usangList: [],
+        ringkasan: [],
+        pecahan: { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 },
+        jumlahAset: 0,
       };
     }
 
-    const rep = item.laporanPraJkpak!;
+    const ringkasan = ringkasLaporan(item.laporanPraJkpak);
     deptGroups[d].lokasiList.push(item);
-    deptGroups[d].baik += rep.baik || 0;
-    deptGroups[d].rosak += rep.rosak || 0;
-    deptGroups[d].usang += rep.usang || 0;
-    deptGroups[d].hilang += rep.hilang || 0;
+    deptGroups[d].ringkasan.push(ringkasan);
+    deptGroups[d].jumlahAset += ringkasan.jumlahDiperiksa;
+    totAset += ringkasan.jumlahDiperiksa;
 
-    totBaik += rep.baik || 0;
-    totRosak += rep.rosak || 0;
-    totUsang += rep.usang || 0;
-    totHilang += rep.hilang || 0;
-
-    if (rep.rosak > 0) {
-      deptGroups[d].loList.push({
-        lokasi: item.lokasi,
-        bil: rep.rosak,
-        aduan: rep.noLaporanKerosakan || '-',
-        lo: rep.noPesananKerajaan || '-',
-        status: rep.statusPenyelenggaraan || 'Pesanan Kerajaan Dikeluarkan',
-      });
-    }
-
-    if (rep.usang > 0) {
-      deptGroups[d].usangList.push({
-        lokasi: item.lokasi,
-        bil: rep.usang,
-        sebab: rep.sebabTidakDigunakan || '-',
-        justifikasi: rep.justifikasiTidakDigunakan || '-',
-        syor: rep.syorTindakanUsang || 'Pelupusan Segera (KEW.PA-19)',
-      });
-    }
+    (['A', 'B', 'C', 'D', 'E', 'F'] as const).forEach((kod) => {
+      deptGroups[d].pecahan[kod] += ringkasan.pecahan[kod];
+      totPecahan[kod] += ringkasan.pecahan[kod];
+    });
   });
 
   const deptKeys = Object.keys(deptGroups);
+
+  /** Baris dokumen sokongan (C/D/E/F) merentas semua lokasi jabatan. */
+  const barisDokumen = (grp: DeptGroup) =>
+    grp.ringkasan.flatMap((ringkasan, idx) =>
+      ringkasan.dokumen.map((dokumen) => ({
+        lokasi: grp.lokasiList[idx].lokasi,
+        ...dokumen,
+      }))
+    );
+
+  /** Baris status B (Tidak Digunakan) dengan sebab piawai. */
+  const barisTidakDigunakan = (grp: DeptGroup) =>
+    grp.ringkasan
+      .map((ringkasan, idx) => ({
+        lokasi: grp.lokasiList[idx].lokasi,
+        bilangan: ringkasan.pecahan.B,
+        sebab: ringkasan.sebabTidakDigunakan,
+      }))
+      .filter((baris) => baris.bilangan > 0);
+
+  const WARNA_KPI: Record<keyof typeof totPecahan, string> = {
+    A: 'border-emerald-200 text-emerald-700',
+    B: 'border-slate-300 text-slate-700',
+    C: 'border-amber-200 text-amber-700',
+    D: 'border-sky-200 text-sky-700',
+    E: 'border-indigo-200 text-indigo-700',
+    F: 'border-rose-200 text-rose-700',
+  };
 
   return (
     <div className="space-y-6">
@@ -152,8 +147,8 @@ export default function PraJkpakSection({
         </div>
       </div>
 
-      {/* Aggregate Numbers Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+      {/* Aggregate Numbers Bar — selaras KEW.PA-11 (A–F) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3.5">
         
         <div className="bg-white p-4 rounded-xl border border-slate-200 text-center shadow-xs">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
@@ -162,48 +157,29 @@ export default function PraJkpakSection({
           <span className="text-2xl font-extrabold text-slate-900 font-mono tabular-nums mt-1 block">
             {totLokasi}
           </span>
-          <span className="text-[10px] text-slate-400">Diperiksa 100%</span>
+          <span className="text-[10px] text-slate-400">{totAset} aset diperiksa</span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-emerald-200 text-center shadow-xs">
-          <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-            Aset Baik
-          </span>
-          <span className="text-2xl font-extrabold text-emerald-600 font-mono tabular-nums mt-1 block">
-            {totBaik}
-          </span>
-          <span className="text-[10px] text-emerald-700 font-medium">Boleh digunakan</span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-amber-200 text-center shadow-xs">
-          <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
-            Perlu Baiki (LO)
-          </span>
-          <span className="text-2xl font-extrabold text-amber-600 font-mono tabular-nums mt-1 block">
-            {totRosak}
-          </span>
-          <span className="text-[10px] text-amber-700 font-medium">Ada Aduan & LO</span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-orange-200 text-center shadow-xs">
-          <span className="text-[10px] font-bold text-orange-900 uppercase tracking-wider block">
-            Syor Pelupusan
-          </span>
-          <span className="text-2xl font-extrabold text-orange-600 font-mono tabular-nums mt-1 block">
-            {totUsang}
-          </span>
-          <span className="text-[10px] text-orange-700 font-medium">Usang / Luput</span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-rose-200 text-center shadow-xs">
-          <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wider block">
-            Tidak Dijumpai
-          </span>
-          <span className="text-2xl font-extrabold text-rose-600 font-mono tabular-nums mt-1 block">
-            {totHilang}
-          </span>
-          <span className="text-[10px] text-rose-700 font-medium">Kehilangan fizikal</span>
-        </div>
+        {(['A', 'B', 'C', 'D', 'E', 'F'] as const).map((kod) => (
+          <div
+            key={kod}
+            className={`bg-white p-4 rounded-xl border text-center shadow-xs ${WARNA_KPI[kod]}`}
+          >
+            <span className="block text-[10px] font-bold uppercase tracking-wider">
+              {kod}. {LABEL_STATUS[kod]}
+            </span>
+            <span className="mt-1 block font-mono text-2xl font-extrabold tabular-nums">
+              {totPecahan[kod]}
+            </span>
+            <span className="text-[10px] font-medium opacity-80">
+              {kod === 'C' || kod === 'D' || kod === 'E' || kod === 'F'
+                ? JENIS_DOKUMEN[kod]
+                : kod === 'B'
+                  ? 'Perlu justifikasi'
+                  : 'Baki KEW.PA-7'}
+            </span>
+          </div>
+        ))}
 
       </div>
 
@@ -253,56 +229,65 @@ export default function PraJkpakSection({
                   </div>
 
                   <div className="flex items-center gap-2 font-mono text-xs flex-wrap">
-                    <span className="px-2 py-1 bg-emerald-50 text-emerald-800 rounded border border-emerald-200">
-                      Baik: <strong>{grp.baik}</strong>
-                    </span>
-                    <span className="px-2 py-1 bg-amber-50 text-amber-800 rounded border border-amber-200">
-                      Rosak (LO): <strong>{grp.rosak}</strong>
-                    </span>
-                    <span className="px-2 py-1 bg-orange-50 text-orange-800 rounded border border-orange-200">
-                      Usang: <strong>{grp.usang}</strong>
-                    </span>
+                    {(['A', 'B', 'C', 'D', 'E', 'F'] as const)
+                      .filter((kod) => grp.pecahan[kod] > 0)
+                      .map((kod) => (
+                        <span
+                          key={kod}
+                          className={`px-2 py-1 rounded border ${WARNA_KPI[kod]} bg-white`}
+                        >
+                          {kod}: <strong>{grp.pecahan[kod]}</strong>
+                        </span>
+                      ))}
                   </div>
                 </div>
 
                 <div className="p-5 space-y-4 text-xs">
                   
-                  {/* Table 1: Rekod Aduan Kerosakan & Pesanan Kerajaan (LO) */}
+                  {/* Table 1: Dokumen sokongan C–F (laporan kerosakan, LPO, pinjaman, polis) */}
                   <div className="space-y-2">
                     <h5 className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
                       <Wrench className="w-3.5 h-3.5 text-amber-600" />
-                      <span>1. Rekod Aduan Kerosakan & Pesanan Kerajaan (Local Order - LO)</span>
+                      <span>1. Dokumen Sokongan Status C–F (KEW.PA-11)</span>
                     </h5>
 
-                    {grp.loList.length > 0 ? (
+                    {barisDokumen(grp).length > 0 ? (
                       <div className="border border-amber-200 rounded-xl overflow-hidden bg-amber-50/20">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-amber-100/70 border-b border-amber-200 text-amber-950 font-semibold">
                             <tr>
                               <th className="py-2 px-3">Lokasi Ruang</th>
                               <th className="py-2 px-3 text-center w-16">Unit</th>
-                              <th className="py-2 px-3">No. Rujukan Laporan Aduan</th>
-                              <th className="py-2 px-3">No. Pesanan Kerajaan (LO)</th>
-                              <th className="py-2 px-3">Status Pembaikan</th>
+                              <th className="py-2 px-3">Status</th>
+                              <th className="py-2 px-3">Dokumen Diperlukan</th>
+                              <th className="py-2 px-3">Rekod Pemeriksa</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-amber-200/50">
-                            {grp.loList.map((l, i) => (
-                              <tr key={i} className="hover:bg-amber-50/40">
+                            {barisDokumen(grp).map((l, i) => (
+                              <tr key={`${l.lokasi}-${l.kod}-${i}`} className="hover:bg-amber-50/40">
                                 <td className="py-2 px-3 font-semibold text-slate-800">
                                   {l.lokasi}
                                 </td>
                                 <td className="py-2 px-3 text-center font-mono font-bold text-amber-700">
-                                  {l.bil}
+                                  {l.bilangan}
                                 </td>
-                                <td className="py-2 px-3 font-mono text-amber-900 font-medium">
-                                  {l.aduan}
-                                </td>
-                                <td className="py-2 px-3 font-mono text-slate-900 font-bold">
-                                  {l.lo}
+                                <td className="py-2 px-3 font-semibold text-slate-700">
+                                  {l.kod}. {l.label}
                                 </td>
                                 <td className="py-2 px-3 text-slate-600 text-[11px]">
-                                  {l.status}
+                                  {l.jenisDokumen}
+                                </td>
+                                <td
+                                  className={`py-2 px-3 font-mono text-[11px] ${
+                                    l.adaDokumen === true
+                                      ? 'font-semibold text-emerald-800'
+                                      : l.adaDokumen === false
+                                        ? 'font-semibold text-rose-700'
+                                        : 'text-slate-500'
+                                  }`}
+                                >
+                                  {teksDokumen(l)}
                                 </td>
                               </tr>
                             ))}
@@ -311,19 +296,19 @@ export default function PraJkpakSection({
                       </div>
                     ) : (
                       <p className="text-slate-400 italic text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                        Tiada aset rosak dikesan yang memerlukan Pesanan Kerajaan (LO).
+                        Tiada aset dalam status C–F bagi jabatan ini.
                       </p>
                     )}
                   </div>
 
-                  {/* Table 2: Justifikasi Aset Tidak Digunakan (Usang / Terbiar) */}
+                  {/* Table 2: Justifikasi status B (Tidak Digunakan) */}
                   <div className="space-y-2">
                     <h5 className="font-bold text-orange-950 flex items-center gap-1.5 text-xs">
                       <Recycle className="w-3.5 h-3.5 text-orange-600" />
-                      <span>2. Justifikasi Aset Tidak Digunakan (Syor Pelupusan / Pindahan)</span>
+                      <span>2. Justifikasi Aset Tidak Digunakan (Status B — Syor Pelupusan / Pindahan)</span>
                     </h5>
 
-                    {grp.usangList.length > 0 ? (
+                    {barisTidakDigunakan(grp).length > 0 ? (
                       <div className="border border-orange-200 rounded-xl overflow-hidden bg-orange-50/20">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-orange-100/70 border-b border-orange-200 text-orange-950 font-semibold">
@@ -331,26 +316,23 @@ export default function PraJkpakSection({
                               <th className="py-2 px-3">Lokasi Ruang</th>
                               <th className="py-2 px-3 text-center w-16">Unit</th>
                               <th className="py-2 px-3">Sebab Piawai Pekeliling</th>
-                              <th className="py-2 px-3">Ulasan Justifikasi Teknikal & Syor</th>
+                              <th className="py-2 px-3">Cadangan Pemeriksa</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-orange-200/50">
-                            {grp.usangList.map((u, i) => (
-                              <tr key={i} className="hover:bg-orange-50/40">
+                            {barisTidakDigunakan(grp).map((u, i) => (
+                              <tr key={`${u.lokasi}-${i}`} className="hover:bg-orange-50/40">
                                 <td className="py-2 px-3 font-semibold text-slate-800">
                                   {u.lokasi}
                                 </td>
                                 <td className="py-2 px-3 text-center font-mono font-bold text-orange-700">
-                                  {u.bil}
+                                  {u.bilangan}
                                 </td>
                                 <td className="py-2 px-3 text-orange-900 font-medium">
-                                  {u.sebab}
+                                  {u.sebab || 'Tidak direkod'}
                                 </td>
                                 <td className="py-2 px-3 text-slate-700">
-                                  <span className="italic">&ldquo;{u.justifikasi}&rdquo;</span> &bull;{' '}
-                                  <strong className="text-slate-900 not-italic">
-                                    {u.syor}
-                                  </strong>
+                                  {grp.lokasiList[i]?.laporanPraJkpak?.cadangan || '-'}
                                 </td>
                               </tr>
                             ))}
@@ -359,7 +341,7 @@ export default function PraJkpakSection({
                       </div>
                     ) : (
                       <p className="text-slate-400 italic text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                        Tiada aset usang atau tidak digunakan yang disyorkan pelupusan.
+                        Tiada aset tidak digunakan yang disyorkan pelupusan.
                       </p>
                     )}
                   </div>

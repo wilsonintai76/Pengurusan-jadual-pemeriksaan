@@ -39,6 +39,7 @@ import {
 import { dataApi, EMPTY_SETTINGS, ApiError, type AssetPayload } from '@/lib/dataApi';
 import { ShieldCheck } from 'lucide-react';
 import { NEW_VERSION_EVENT } from '@/lib/versionWatcher';
+import { ringkasLaporan, teksDokumen } from '@/lib/praJkpak';
 import { UNAUTHORIZED_EVENT, clearSession, fetchAuthMeta, type AuthSession } from '@/lib/authClient';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 import ForcePasswordModal from '@/components/modals/ForcePasswordModal';
@@ -676,12 +677,40 @@ export default function App() {
   };
 
   const handleExportPraJkpakCSV = () => {
-    let csv = 'Bil,Jabatan,Lokasi,Baik,Rosak,Usang,Hilang,NoAduanKerosakan,NoPesananKerajaanLO,StatusPembaikan,SebabUsang,JustifikasiUsang,CadanganPraJKPAK\n';
+    let csv =
+      'Bil,Jabatan,Lokasi,JumlahAset,A,B,C,D,E,F,DokumenC,DokumenD,DokumenE,DokumenF,SebabB,CadanganPraJKPAK,TarikhHantar\n';
     const selesai = schedules.filter((s) => s.status === 'Selesai' && s.laporanPraJkpak);
 
+    const sel = (nilai: string) => `"${String(nilai).replace(/"/g, '""')}"`;
+
     selesai.forEach((d, i) => {
-      const r = d.laporanPraJkpak!;
-      csv += `${i + 1},"${d.jabatan}","${d.lokasi}",${r.baik || 0},${r.rosak || 0},${r.usang || 0},${r.hilang || 0},"${r.noLaporanKerosakan || ''}","${r.noPesananKerajaan || ''}","${r.statusPenyelenggaraan || ''}","${r.sebabTidakDigunakan || ''}","${r.justifikasiTidakDigunakan || ''}","${r.cadangan || ''}"\n`;
+      const ringkasan = ringkasLaporan(d.laporanPraJkpak);
+      const { pecahan } = ringkasan;
+      const dokumen = (kod: 'C' | 'D' | 'E' | 'F') => {
+        const item = ringkasan.dokumen.find((dok) => dok.kod === kod);
+        return item ? teksDokumen(item) : '';
+      };
+
+      csv +=
+        [
+          i + 1,
+          sel(d.jabatan),
+          sel(d.lokasi),
+          ringkasan.jumlahDiperiksa,
+          pecahan.A,
+          pecahan.B,
+          pecahan.C,
+          pecahan.D,
+          pecahan.E,
+          pecahan.F,
+          sel(dokumen('C')),
+          sel(dokumen('D')),
+          sel(dokumen('E')),
+          sel(dokumen('F')),
+          sel(ringkasan.sebabTidakDigunakan),
+          sel(ringkasan.cadangan),
+          sel(ringkasan.tarikhHantar ?? ''),
+        ].join(',') + '\n';
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

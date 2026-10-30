@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatJulatTarikhMY } from '@/lib/tarikh';
+import { ringkasLaporan, teksDokumen } from '@/lib/praJkpak';
 import { InspectionSchedule } from '@/lib/types';
 
 interface PrintAreaProps {
@@ -116,24 +117,27 @@ export default function PrintArea({ mode, schedules, tahun }: PrintAreaProps) {
             <th className="border border-black p-1.5 text-center w-8">Bil</th>
             <th className="border border-black p-1.5 text-left">Lokasi / Jabatan</th>
             <th className="border border-black p-1.5 text-left">Pegawai Pemeriksa</th>
-            <th className="border border-black p-1.5 text-center w-12">Baik</th>
-            <th className="border border-black p-1.5 text-center w-12">Rosak</th>
-            <th className="border border-black p-1.5 text-center w-12">Usang</th>
-            <th className="border border-black p-1.5 text-left">Rekod Aduan & LO Kerosakan</th>
-            <th className="border border-black p-1.5 text-left">Justifikasi Aset Usang</th>
+            <th className="border border-black p-1.5 text-center w-9">A</th>
+            <th className="border border-black p-1.5 text-center w-9">B</th>
+            <th className="border border-black p-1.5 text-center w-9">C</th>
+            <th className="border border-black p-1.5 text-center w-9">D</th>
+            <th className="border border-black p-1.5 text-center w-9">E</th>
+            <th className="border border-black p-1.5 text-center w-9">F</th>
+            <th className="border border-black p-1.5 text-left">Dokumen Sokongan (C–F) & Justifikasi B</th>
             <th className="border border-black p-1.5 text-left">Syor Pemeriksa Pra-JKPAK</th>
           </tr>
         </thead>
         <tbody>
           {selesai.length === 0 ? (
             <tr>
-              <td colSpan={9} className="border border-black p-6 text-center text-xs">
+              <td colSpan={11} className="border border-black p-6 text-center text-xs">
                 Tiada rekod pemeriksaan selesai untuk dibentangkan.
               </td>
             </tr>
           ) : (
             selesai.map((item, idx) => {
-              const rep = item.laporanPraJkpak!;
+              const ringkasan = ringkasLaporan(item.laporanPraJkpak);
+              const { pecahan } = ringkasan;
               return (
                 <tr key={item.id}>
                   <td className="border border-black p-1.5 text-center font-mono">{idx + 1}</td>
@@ -146,38 +150,44 @@ export default function PrintArea({ mode, schedules, tahun }: PrintAreaProps) {
                     2. {item.pemeriksa2}
                   </td>
                   <td className="border border-black p-1.5 text-center font-mono font-bold">
-                    {rep.baik}
+                    {pecahan.A}
+                  </td>
+                  <td className="border border-black p-1.5 text-center font-mono font-bold">
+                    {pecahan.B}
+                  </td>
+                  <td className="border border-black p-1.5 text-center font-mono font-bold">
+                    {pecahan.C}
+                  </td>
+                  <td className="border border-black p-1.5 text-center font-mono font-bold">
+                    {pecahan.D}
+                  </td>
+                  <td className="border border-black p-1.5 text-center font-mono font-bold">
+                    {pecahan.E}
                   </td>
                   <td className="border border-black p-1.5 text-center font-mono font-bold text-red-700">
-                    {rep.rosak}
+                    {pecahan.F}
                   </td>
-                  <td className="border border-black p-1.5 text-center font-mono font-bold text-orange-700">
-                    {rep.usang}
-                  </td>
-                  <td className="border border-black p-1.5 text-[10px]">
-                    {rep.rosak > 0 ? (
-                      <div>
-                        Aduan: <strong>{rep.noLaporanKerosakan || '-'}</strong><br />
-                        LO: <strong>{rep.noPesananKerajaan || '-'}</strong><br />
-                        <span className="text-gray-600 italic">({rep.statusPenyelenggaraan})</span>
-                      </div>
+                  <td className="border border-black p-1.5 text-[9px]">
+                    {ringkasan.dokumen.length === 0 && !ringkasan.sebabTidakDigunakan ? (
+                      <span className="text-gray-500">Tiada dokumen diperlukan</span>
                     ) : (
-                      <span className="text-gray-500">Tiada Kerosakan</span>
+                      <div className="space-y-0.5">
+                        {ringkasan.dokumen.map((dokumen) => (
+                          <div key={dokumen.kod}>
+                            <strong>{dokumen.kod}</strong> ({dokumen.bilangan}) {dokumen.jenisDokumen}:{' '}
+                            <span>{teksDokumen(dokumen)}</span>
+                          </div>
+                        ))}
+                        {ringkasan.sebabTidakDigunakan && (
+                          <div>
+                            <strong>B</strong> sebab: <span>{ringkasan.sebabTidakDigunakan}</span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="border border-black p-1.5 text-[10px]">
-                    {rep.usang > 0 ? (
-                      <div>
-                        <strong>{rep.sebabTidakDigunakan}</strong><br />
-                        <em>&ldquo;{rep.justifikasiTidakDigunakan}&rdquo;</em><br />
-                        <span>Syor: <strong>{rep.syorTindakanUsang}</strong></span>
-                      </div>
-                    ) : (
-                      <span className="text-gray-500">Tiada Aset Terbiar</span>
-                    )}
-                  </td>
-                  <td className="border border-black p-1.5 text-[10px]">
-                    {rep.cadangan || 'Tiada syor khas.'}
+                    {ringkasan.cadangan || 'Tiada syor khas.'}
                   </td>
                 </tr>
               );
