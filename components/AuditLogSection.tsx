@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { 
   ShieldCheck, 
@@ -107,10 +105,11 @@ export default function AuditLogSection({ logs }: AuditLogSectionProps) {
               <tr>
                 <th className="py-2.5 px-4 w-12 text-center">ID</th>
                 <th className="py-2.5 px-4">Pegawai / Emel</th>
+                <th className="py-2.5 px-4">Peranan Digunakan</th>
                 <th className="py-2.5 px-4">Tindakan / Sasaran</th>
                 <th className="py-2.5 px-4 text-center">Keputusan</th>
                 <th className="py-2.5 px-4">Kod Dasar (Policy ID)</th>
-                <th className="py-2.5 px-4">Catatan Integriti</th>
+                <th className="py-2.5 px-4">Sebab / Catatan Integriti</th>
                 <th className="py-2.5 px-4">Masa</th>
               </tr>
             </thead>
@@ -122,6 +121,15 @@ export default function AuditLogSection({ logs }: AuditLogSectionProps) {
                   </td>
                   <td className="py-2.5 px-4 font-mono text-slate-800">
                     {log.userEmail}
+                  </td>
+                  <td className="py-2.5 px-4">
+                    {log.actedAsRole ? (
+                      <span className="inline-flex rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 border border-indigo-200">
+                        {log.actedAsRole}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="py-2.5 px-4 font-mono text-slate-600">
                     <span className="font-semibold text-slate-900">{log.action}</span>
@@ -144,7 +152,12 @@ export default function AuditLogSection({ logs }: AuditLogSectionProps) {
                     {log.policyId}
                   </td>
                   <td className="py-2.5 px-4 text-slate-600 leading-snug">
-                    {log.notes}
+                    {log.reason && (
+                      <span className="mb-1 inline-flex rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-800 border border-amber-200">
+                        {log.reason}
+                      </span>
+                    )}
+                    <span className="block">{log.notes}</span>
                   </td>
                   <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px] whitespace-nowrap">
                     {log.timestamp}

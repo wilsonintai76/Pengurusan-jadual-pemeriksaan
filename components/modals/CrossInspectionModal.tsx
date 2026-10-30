@@ -1,22 +1,21 @@
-'use client';
-
 import React from 'react';
 import { X, ArrowLeftRight, CheckCircle2, ShieldCheck } from 'lucide-react';
-import { CROSS_PAIRS } from '@/lib/initialData';
+import { useCrossPairs, useDepartments } from '@/lib/useReferenceData';
 
 interface CrossInspectionModalProps {
   onClose: () => void;
 }
 
 export default function CrossInspectionModal({ onClose }: CrossInspectionModalProps) {
-  const pairList = [
-    { a: 'JTMK', b: 'JKE', nameA: 'Jabatan Teknologi Maklumat & Komunikasi', nameB: 'Jabatan Kejuruteraan Elektrik' },
-    { a: 'JKM', b: 'JKA', nameA: 'Jabatan Kejuruteraan Mekanikal', nameB: 'Jabatan Kejuruteraan Awam' },
-    { a: 'JP', b: 'JPA', nameA: 'Jabatan Perdagangan', nameB: 'Jabatan Pengajian Am' },
-    { a: 'JMSK', b: 'PENTADBIRAN', nameA: 'Jabatan Matematik, Sains & Komputer', nameB: 'Pentadbiran & Unit Pengurusan Aset' },
-    { a: 'HAL EHWAL PELAJAR', b: 'PSA', nameA: 'Jabatan Hal Ehwal Pelajar (JHEP)', nameB: 'Perpustakaan Tan Sri Hamdan' },
-    { a: 'CISEC', b: 'ULPL', nameA: 'CISEC', nameB: 'Unit Latihan & Pendidikan Lanjutan' },
-  ];
+  const crossPairs = useCrossPairs();
+  const departments = useDepartments();
+
+  const pairList = Object.entries(crossPairs).map(([a, b]) => ({
+    a,
+    b,
+    nameA: departments.find((d) => d.id === a)?.name ?? a,
+    nameB: departments.find((d) => d.id === b)?.name ?? b,
+  }));
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">

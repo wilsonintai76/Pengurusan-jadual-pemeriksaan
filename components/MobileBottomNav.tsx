@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { 
   Home, 
@@ -17,9 +15,12 @@ import {
   UserCheck,
   MapPin,
   Building2,
-  SlidersHorizontal
+  SlidersHorizontal,
+  BadgeCheck,
+  ArrowLeftRight
 } from 'lucide-react';
 import { UserSession } from '@/lib/types';
+import { ROLE_LABELS } from '@/lib/systemRoles';
 
 interface MobileBottomNavProps {
   currentUser: UserSession | null;
@@ -28,6 +29,8 @@ interface MobileBottomNavProps {
   onLogout: () => void;
   onSync: () => void;
   praJkpakCount: number;
+  /** Pentadbir Sistem sahaja — Tetapan disembunyikan daripada peranan lain. */
+  isAdmin?: boolean;
   onOpenClaimModal?: () => void;
   onOpenPbacModal?: () => void;
   onOpenLogin?: () => void;
@@ -41,6 +44,7 @@ export default function MobileBottomNav({
   onLogout,
   onSync,
   praJkpakCount,
+  isAdmin = false,
   onOpenClaimModal,
   onOpenPbacModal,
   onOpenLogin,
@@ -201,9 +205,24 @@ export default function MobileBottomNav({
               >
                 <div className="flex items-center gap-3">
                   <Users className="w-4 h-4 text-indigo-600" />
-                  <span>Direktori Pegawai (6 Peranan)</span>
+                  <span>Direktori Pegawai</span>
                 </div>
-                <span className="text-[10px] text-indigo-700 font-mono font-bold">6 Peranan</span>
+                <span className="text-[10px] text-indigo-700 font-mono font-bold">{ROLE_LABELS.length} Peranan</span>
+              </button>
+
+              
+
+              <button
+                onClick={() => handleTabSelect('kitaran')}
+                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                  activeTab === 'kitaran' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <ArrowLeftRight className="w-4 h-4 text-sky-600" />
+                  <span>Kitaran Pemeriksaan</span>
+                </div>
+                <span className="text-[10px] text-sky-700 font-mono">Kolam</span>
               </button>
 
               <button
@@ -219,18 +238,20 @@ export default function MobileBottomNav({
                 <span className="text-[10px] text-purple-700 font-mono">Enjin Dasar</span>
               </button>
 
-              <button
-                onClick={() => handleTabSelect('tetapan')}
-                className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                  activeTab === 'tetapan' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <SlidersHorizontal className="w-4 h-4 text-slate-700" />
-                  <span>Tetapan Sistem & Sandaran</span>
-                </div>
-                <span className="text-[10px] text-slate-400">Konfigurasi</span>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => handleTabSelect('tetapan')}
+                  className={`w-full p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                    activeTab === 'tetapan' ? 'bg-slate-900 text-white' : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <SlidersHorizontal className="w-4 h-4 text-slate-700" />
+                    <span>Tetapan Sistem & Sandaran</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Konfigurasi</span>
+                </button>
+              )}
             </div>
 
             {/* Quick Actions in Mobile Drawer */}
@@ -322,12 +343,12 @@ export default function MobileBottomNav({
           <button
             onClick={() => setShowDrawer(!showDrawer)}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition min-h-[44px] ${
-              showDrawer || ['pekeliling', 'direktori', 'audit'].includes(activeTab)
+              showDrawer || ['pekeliling', 'direktori', 'kitaran', 'audit'].includes(activeTab)
                 ? 'text-slate-900 font-bold'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <div className={`p-1 rounded-lg transition ${showDrawer || ['pekeliling', 'direktori', 'audit'].includes(activeTab) ? 'bg-amber-400 text-slate-950' : ''}`}>
+            <div className={`p-1 rounded-lg transition ${showDrawer || ['pekeliling', 'direktori', 'kitaran', 'audit'].includes(activeTab) ? 'bg-amber-400 text-slate-950' : ''}`}>
               <Menu className="w-4 h-4" />
             </div>
             <span className="text-[10px] mt-0.5 tracking-tight">Lagi</span>

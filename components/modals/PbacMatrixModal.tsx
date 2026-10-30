@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { X, ShieldCheck, CheckCircle2, Lock, ShieldAlert } from 'lucide-react';
 
@@ -65,7 +63,7 @@ export default function PbacMatrixModal({ onClose }: PbacMatrixModalProps) {
               </h3>
             </div>
             <p className="text-xs text-purple-200">
-              Spesifikasi dasar keselamatan dan penguatkuasaan integriti AM 2.4 sistem e-JAS
+              Spesifikasi dasar keselamatan dan penguatkuasaan integriti AM 2.4 sistem Inspect-Able
             </p>
           </div>
           <button

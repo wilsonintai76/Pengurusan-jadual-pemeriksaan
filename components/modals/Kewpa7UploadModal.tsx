@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   FileText, 
   Upload, 
@@ -23,7 +21,11 @@ import {
   Users
 } from 'lucide-react';
 import { UserSession, Kewpa7Record, Kewpa7AssetItem, LocationInfo, PegawaiBertanggungjawab } from '@/lib/types';
-import { DEPARTMENTS } from '@/lib/initialData';
+import { useDepartments, useOfficers } from '@/lib/useReferenceData';
+import { deriveKategoriRuang, parseKodLokasi } from '@/lib/kodLokasi';
+import { KEWPA7_EXTRACT_URL } from '@/lib/apiConfig';
+import { authHeaders } from '@/lib/authClient';
+import { dataApi, type IssuedCredentials } from '@/lib/dataApi';
 
 interface Kewpa7UploadModalProps {
   isOpen: boolean;
@@ -40,49 +42,116 @@ export default function Kewpa7UploadModal({
   onSaveKewpa7Record,
   initialRecord,
 }: Kewpa7UploadModalProps) {
+  const departments = useDepartments();
+  const officers = useOfficers();
   const [step, setStep] = useState<'upload' | 'extracting' | 'review'>(
     initialRecord ? 'review' : 'upload'
   );
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractProgress, setExtractProgress] = useState(0);
-  const [selectedDeptCode, setSelectedDeptCode] = useState<string>('JKM');
+  const [selectedDeptCode, setSelectedDeptCode] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [issuedOfficers, setIssuedOfficers] = useState<
+    Array<{ nama: string; credentials: IssuedCredentials | null }> | null
+  >(null);
+  const [extractDiagnostic, setExtractDiagnostic] = useState<{
+    missing: string[];
+    preview: string;
+  } | null>(null);
+  const [matchedLocation, setMatchedLocation] = useState<{
+    id: string;
+    kodRuang: string;
+    nama: string;
+  } | null>(null);
+  const [r2Key, setR2Key] = useState<string>('');
 
   // Extracted Data State
   const [formData, setFormData] = useState<Partial<Kewpa7Record>>(
     initialRecord || {
-      bahagian: 'JABATAN KEJURUTERAAN MEKANIKAL',
-      lokasi: 'BENGKEL HI-TECH',
-      kodLokasi: '130101 / BGN / JKM1 / 01 / B09',
-      pegawaiBertanggungjawabList: [
-        { id: 'OFF-1', nama: 'Wilson Bin Intai', jawatan: 'PPPT' },
-        { id: 'OFF-2', nama: 'HO YOONG CHOW', jawatan: 'PPPT' },
-        { id: 'OFF-3', nama: 'MOHD SHAFIQ BIN MOHAMAD RADZUAN', jawatan: 'PPPT' },
-      ],
+      bahagian: '',
+      lokasi: '',
+      kodLokasi: '',
+      pegawaiBertanggungjawabList: [],
       senaraiAset: [],
     }
   );
+
+  // Pegawai Bertanggungjawab dipilih daripada Direktori Pegawai, dikumpul ikut jabatan.
+  const officerGroups = useMemo(() => {
+    const groups = departments
+      .map((dept) => ({
+        id: dept.id,
+        label: `${dept.id} â€” ${dept.name}`,
+        people: officers.filter((officer) => officer.dept === dept.id),
+      }))
+      .filter((group) => group.people.length > 0);
+
+    const known = new Set(departments.map((dept) => dept.id));
+    const others = officers.filter((officer) => !known.has(officer.dept));
+    if (others.length) {
+      groups.push({ id: '__LAIN__', label: 'Lain-lain', people: others });
+    }
+    return groups;
+  }, [departments, officers]);
+
+  /**
+   * Nama pegawai daripada KEW.PA-7 dipadankan dengan Direktori Pegawai.
+   * Yang tiada dalam direktori ditanda `NEW:<nama>` dan akan didaftarkan automatik
+   * sebagai pengguna baharu apabila borang disimpan.
+   */
+  const mapExtractedOfficers = (raw: unknown): PegawaiBertanggungjawab[] => {
+    const list = Array.isArray(raw) ? raw : [];
+    const mapped: Array<PegawaiBertanggungjawab | null> = list.map((entry) => {
+      const nama = String((entry as { nama?: unknown })?.nama ?? '').trim();
+      if (!nama) return null;
+
+      const directory = officers.find(
+        (officer) => officer.name.trim().toLowerCase() === nama.toLowerCase()
+      );
+      if (directory) {
+        return {
+          id: directory.id || directory.email,
+          nama: directory.name,
+          jawatan: directory.role,
+          emel: directory.email,
+          tel: directory.phone,
+        };
+      }
+
+      return {
+        id: `NEW:${nama}`,
+        nama,
+        jawatan: String((entry as { jawatan?: unknown })?.jawatan ?? '').trim(),
+      };
+    });
+
+    return mapped.filter((entry): entry is PegawaiBertanggungjawab => Boolean(entry));
+  };
+
+  const pendingNewOfficers = (formData.pegawaiBertanggungjawabList || []).filter((officer) =>
+    officer.id?.startsWith('NEW:')
+  );
+
+  /** Hanya Pentadbir Sistem boleh menjana akaun; peranan lain mendaftar ke direktori sahaja. */
+  const canIssueAccounts =
+    currentUser?.role === 'Pentadbir Sistem' ||
+    Boolean(currentUser?.roles?.some((role) => role.roleId === 'PENTADBIR_SISTEM'));
+
+  useEffect(() => {
+    if (!selectedDeptCode && departments.length) setSelectedDeptCode(departments[0].id);
+  }, [departments, selectedDeptCode]);
 
   if (!isOpen) return null;
 
   const handleStartManualMode = () => {
     setFormData({
-      bahagian: 'JABATAN KEJURUTERAAN MEKANIKAL',
-      lokasi: 'BENGKEL & MAKMAL BARU',
-      kodLokasi: '130101 / BGN / JKM / 01 / B10',
-      pegawaiBertanggungjawabList: [
-        { id: 'OFF-1', nama: currentUser?.name || 'En. Pegawai Penjaga', jawatan: currentUser?.grade || 'Penolong Pegawai Aset' }
-      ],
-      senaraiAset: [
-        {
-          id: 'AST-001',
-          bil: 1,
-          noSiriPendaftaran: 'KKM/POLIKU/JKM/H/26/001',
-          keteranganAset: 'Mesin Pemotongan CNC High-Speed Laser',
-          tarikhPenempatan: new Date().toISOString().slice(0, 10),
-          statusFizikal: 'Baik'
-        }
-      ]
+      bahagian: '',
+      lokasi: '',
+      kodLokasi: '',
+      // Pegawai Bertanggungjawab dibiarkan kosong: lantikan ikut lokasi dalam Direktori Pegawai.
+      pegawaiBertanggungjawabList: [],
+      senaraiAset: [],
     });
     setStep('review');
   };
@@ -101,53 +170,56 @@ export default function Kewpa7UploadModal({
       const body = new FormData();
       body.append('file', file);
 
-      const res = await fetch('/api/kewpa7/extract', {
+      const res = await fetch(KEWPA7_EXTRACT_URL, {
         method: 'POST',
+        headers: { ...authHeaders() },
         body,
       });
 
       clearInterval(interval);
       setExtractProgress(100);
 
+      if (res.status === 401) {
+        throw new Error('Sesi tamat. Sila log masuk semula sebelum memuat naik KEW.PA-7.');
+      }
+
+      const payload: any = await res.json().catch(() => null);
+
       if (!res.ok) {
-        throw new Error(`Ralat pelayan (${res.status})`);
+        throw new Error(
+          payload?.message ||
+            `Ralat pelayan (${res.status}). Pengekstrakan automatik tidak berjaya.`
+        );
       }
 
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Respons daripada pelayan bukan format JSON');
-      }
-
-      const json = await res.json();
-      if (json.success && json.data) {
-        const d = json.data;
+      if (payload?.success && payload.data) {
+        const d = payload.data;
         setFormData({
-          bahagian: d.bahagian || 'JABATAN KEJURUTERAAN MEKANIKAL',
-          lokasi: d.lokasi || 'BENGKEL HI-TECH',
-          kodLokasi: d.kodLokasi || '130101 / BGN / JKM1 / 01 / B09',
-          pegawaiBertanggungjawabList: d.pegawaiBertanggungjawabList || [
-            { id: 'OFF-1', nama: 'Wilson Bin Intai', jawatan: 'PPPT' },
-            { id: 'OFF-2', nama: 'HO YOONG CHOW', jawatan: 'PPPT' },
-            { id: 'OFF-3', nama: 'MOHD SHAFIQ BIN MOHAMAD RADZUAN', jawatan: 'PPPT' },
-          ],
+          bahagian: d.bahagian || '',
+          lokasi: d.lokasi || '',
+          kodLokasi: d.kodLokasi || '',
+          pegawaiBertanggungjawabList: mapExtractedOfficers(d.pegawaiBertanggungjawabList),
           senaraiAset: d.senaraiAset || [],
         });
+        setExtractDiagnostic(
+          Array.isArray(payload.missingFields) && payload.missingFields.length && payload.textPreview
+            ? { missing: payload.missingFields, preview: payload.textPreview }
+            : null
+        );
+        setMatchedLocation(payload.matchedLocation ?? null);
+        setR2Key(String(payload.r2Key ?? ''));
         setTimeout(() => setStep('review'), 400);
       } else {
-        alert('Ralat semasa mengekstrak fail. Format tidak disokong.');
-        setStep('upload');
+        throw new Error(payload?.message || 'Format KEW.PA-7 tidak dapat dikenal pasti.');
       }
     } catch (err) {
       clearInterval(interval);
       console.error(err);
-      alert('Gagal mengekstrak data daripada borang KEW.PA-7.');
+      alert(
+        `${(err as Error).message || 'Gagal mengekstrak data KEW.PA-7.'}\n\nAnda boleh mengisi maklumat secara manual dalam langkah seterusnya.`
+      );
       setStep('upload');
     }
-  };
-
-  const handleUseSamplePdf = async () => {
-    const dummyFile = new File(['sample'], 'kewpa7-hitech_ebf7f58f.pdf', { type: 'application/pdf' });
-    handleProcessFile(dummyFile);
   };
 
   // Manage Responsible Officers
@@ -155,8 +227,8 @@ export default function Kewpa7UploadModal({
     const currentList = formData.pegawaiBertanggungjawabList || [];
     const newOfficer: PegawaiBertanggungjawab = {
       id: `OFF-${Date.now().toString().slice(-4)}`,
-      nama: 'Nama Pegawai Bertanggungjawab Baru',
-      jawatan: 'Penolong Pegawai Aset (PPPT)',
+      nama: '',
+      jawatan: '',
     };
     setFormData({
       ...formData,
@@ -167,6 +239,29 @@ export default function Kewpa7UploadModal({
   const handleUpdateOfficer = (index: number, field: keyof PegawaiBertanggungjawab, value: string) => {
     const list = [...(formData.pegawaiBertanggungjawabList || [])];
     list[index] = { ...list[index], [field]: value };
+    setFormData({ ...formData, pegawaiBertanggungjawabList: list });
+  };
+
+  /** Pilih pegawai daripada direktori: nama & jawatan diisi automatik. */
+  const handleSelectOfficer = (index: number, officerId: string) => {
+    const selected = officers.find((officer) => (officer.id || officer.email) === officerId);
+    const list = [...(formData.pegawaiBertanggungjawabList || [])];
+
+    if (selected) {
+      list[index] = {
+        id: selected.id || selected.email,
+        nama: selected.name,
+        jawatan: selected.role,
+        emel: selected.email,
+        tel: selected.phone,
+      };
+    } else if (officerId.startsWith('NEW:')) {
+      // Nama dikesan dalam KEW.PA-7 tetapi belum ada dalam Direktori Pegawai.
+      list[index] = { ...list[index], id: officerId, nama: officerId.slice(4) };
+    } else {
+      list[index] = { id: `OFF-${index + 1}`, nama: '', jawatan: '' };
+    }
+
     setFormData({ ...formData, pegawaiBertanggungjawabList: list });
   };
 
@@ -181,9 +276,9 @@ export default function Kewpa7UploadModal({
     const newRow: Kewpa7AssetItem = {
       id: `AST-${Date.now().toString().slice(-4)}`,
       bil: currentList.length + 1,
-      noSiriPendaftaran: `KPT/PKS/I/90/${(currentList.length + 60).toString()}`,
-      keteranganAset: 'MEJA / KERUSI / PERALATAN MAKMAL BARU',
-      tarikhPenempatan: new Date().toLocaleDateString('en-GB'),
+      noSiriPendaftaran: '',
+      keteranganAset: '',
+      tarikhPenempatan: '',
       statusFizikal: 'Baik',
       kategori: 'Aset Bernilai Rendah',
     };
@@ -206,52 +301,124 @@ export default function Kewpa7UploadModal({
   };
 
   // Final Save to Edge D1
-  const handleSaveToD1 = () => {
+  const handleSaveToD1 = async () => {
+    if (isSaving) return;
+
     if (!formData.lokasi || !formData.kodLokasi) {
       alert('Sila pastikan Nama Lokasi dan Kod Lokasi lengkap.');
       return;
     }
 
-    const officerList = formData.pegawaiBertanggungjawabList || [];
-    const primaryOfficerName = officerList.map((o) => o.nama).join(', ') || 'Pegawai Penjaga';
+    if (!selectedDeptCode) {
+      alert('Sila pilih Jabatan Carta Organisasi sebelum menyimpan.');
+      return;
+    }
 
-    const recordId = initialRecord?.id || `KW7-${Date.now().toString().slice(-6)}`;
-    const newRecord: Kewpa7Record = {
-      id: recordId,
-      kodLokasi: formData.kodLokasi!,
-      lokasi: formData.lokasi!,
-      bahagian: formData.bahagian || 'JABATAN KEJURUTERAAN MEKANIKAL',
-      pegawaiBertanggungjawabList: officerList,
-      senaraiAset: (formData.senaraiAset as Kewpa7AssetItem[]) || [],
-      tarikhMuatNaik: initialRecord?.tarikhMuatNaik || new Date().toISOString().slice(0, 10),
-      tarikhKemaskini: new Date().toISOString().slice(0, 10),
-      uploadedByEmail: currentUser?.email || 'penyelaras@poliku.edu.my',
-      statusD1: 'Tersimpan D1',
-      versi: (initialRecord?.versi || 1) + (initialRecord ? 1 : 0),
-    };
+    setIsSaving(true);
+    try {
+      const officerList: PegawaiBertanggungjawab[] = [];
+      const createdOfficers: Array<{ nama: string; credentials: IssuedCredentials | null }> = [];
 
-    // Auto-generate or update location object
-    const newLocation: LocationInfo = {
-      id: `LOK-${Date.now().toString().slice(-4)}`,
-      kodRuang: formData.kodLokasi!.split('/')[0]?.trim() || `RNG-${formData.lokasi!.slice(0, 5).toUpperCase()}`,
-      nama: formData.lokasi!,
-      jabatan: selectedDeptCode || (formData.bahagian?.includes('MEKANIKAL') ? 'JKM' : 'JTMK'),
-      kategoriRuang: formData.lokasi!.toUpperCase().includes('BENGKEL') ? 'Bengkel Teknikal' : 'Makmal Komputer',
-      bangunan: 'Kompleks Bengkel Utama',
-      aras: 'Aras Bawah',
-      penjaga: primaryOfficerName,
-      penjagaJawatan: officerList[0]?.jawatan || 'PPAJ/PPAU',
-      penjagaEmel: currentUser?.email || 'penjaga@poliku.edu.my',
-      penjagaTel: '082-845510',
-      pegawaiBertanggungjawabList: officerList,
-      anggaranAset: newRecord.senaraiAset.length,
-      statusPemeriksaan: 'Belum Mula',
-      kewpa7TerkiniId: recordId,
-      tarikhKemaskiniKewpa7: new Date().toLocaleDateString('en-GB'),
-    };
+      for (const officer of (formData.pegawaiBertanggungjawabList || []).filter((item) => item.nama)) {
+        if (!officer.id?.startsWith('NEW:')) {
+          officerList.push(officer);
+          continue;
+        }
 
-    onSaveKewpa7Record(newRecord, newLocation);
-    onClose();
+        // Pegawai dikesan dalam KEW.PA-7 tetapi tiada dalam direktori.
+        if (canIssueAccounts) {
+          // Pentadbir: daftar + jana kredensial sekali gus.
+          const result = await dataApi.officers.createAccount({
+            nama: officer.nama,
+            dept: selectedDeptCode,
+            role: officer.jawatan || '',
+          });
+          createdOfficers.push({ nama: result.officer.name, credentials: result.credentials });
+          officerList.push({
+            id: result.officer.id || result.officer.email,
+            nama: result.officer.name,
+            jawatan: result.officer.role,
+            emel: result.officer.email,
+            tel: result.officer.phone,
+          });
+        } else {
+          // PPAJ/PPAU & KJ/KU: daftar ke direktori sahaja (akaun dijana pentadbir kemudian).
+          const created = await dataApi.officers.createDirectoryOfficer({
+            nama: officer.nama,
+            dept: selectedDeptCode,
+            role: officer.jawatan || '',
+          });
+          createdOfficers.push({ nama: created.name, credentials: null });
+          officerList.push({
+            id: created.id || created.email,
+            nama: created.name,
+            jawatan: created.role,
+            emel: created.email,
+            tel: created.phone,
+          });
+        }
+      }
+
+      const primaryOfficer = officerList[0];
+      const selectedDepartment = departments.find((dept) => dept.id === selectedDeptCode);
+      const primaryOfficerName = officerList
+        .map((officer) => officer.nama)
+        .filter(Boolean)
+        .join(', ');
+
+      const recordId = initialRecord?.id || `KW7-${Date.now().toString().slice(-6)}`;
+      const newRecord: Kewpa7Record = {
+        id: recordId,
+        kodLokasi: formData.kodLokasi,
+        lokasi: formData.lokasi,
+        bahagian: formData.bahagian || selectedDepartment?.name || '',
+        pegawaiBertanggungjawabList: officerList,
+        senaraiAset: (formData.senaraiAset as Kewpa7AssetItem[]) || [],
+        tarikhMuatNaik: initialRecord?.tarikhMuatNaik || new Date().toISOString().slice(0, 10),
+        tarikhKemaskini: new Date().toISOString().slice(0, 10),
+        uploadedByEmail: currentUser?.email || 'penyelaras@poliku.edu.my',
+        statusD1: 'Tersimpan D1',
+        versi: (initialRecord?.versi || 1) + (initialRecord ? 1 : 0),
+        r2Key: r2Key || undefined,
+      };
+
+      // Auto-generate or update location object
+      const kodSegments = parseKodLokasi(formData.kodLokasi);
+      const newLocation: LocationInfo = {
+        id: `LOK-${Date.now().toString().slice(-4)}`,
+        kodRuang: formData.kodLokasi,
+        nama: formData.lokasi,
+        jabatan: selectedDeptCode,
+        kategoriRuang: deriveKategoriRuang(formData.lokasi) as LocationInfo['kategoriRuang'],
+        bangunan: kodSegments.bangunan,
+        aras: kodSegments.aras,
+        penjaga: primaryOfficerName,
+        penjagaJawatan: primaryOfficer?.jawatan || '',
+        penjagaEmel: primaryOfficer?.emel || currentUser?.email || '',
+        penjagaTel: primaryOfficer?.tel || '',
+        pegawaiBertanggungjawabList: officerList,
+        // Bilangan aset diambil daripada senarai aset KEW.PA-7 yang disimpan.
+        anggaranAset: newRecord.senaraiAset.length,
+        statusPemeriksaan: 'Belum Mula',
+        kewpa7TerkiniId: recordId,
+        tarikhKemaskiniKewpa7: new Date().toLocaleDateString('en-GB'),
+      };
+
+      onSaveKewpa7Record(newRecord, newLocation);
+
+      // Kredensial hanya dipaparkan sekali â€” tahan modal terbuka sehingga pentadbir mengesahkan.
+      if (createdOfficers.length) {
+        setIssuedOfficers(createdOfficers);
+      } else {
+        onClose();
+      }
+    } catch (error) {
+      alert(
+        `Gagal menyimpan: ${(error as Error).message || 'Ralat tidak diketahui.'}\n\nTiada perubahan disimpan.`
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -368,31 +535,6 @@ export default function Kewpa7UploadModal({
                 </div>
               </div>
 
-              {/* Sample Document Shortcut */}
-              <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-900 text-sky-200 flex items-center justify-center shrink-0 font-bold font-mono">
-                    PDF
-                  </div>
-                  <div>
-                    <h5 className="font-bold text-sky-950 text-xs sm:text-sm">
-                      Fail Contoh Ujian: <code className="text-sky-800 font-mono">kewpa7-hitech.pdf</code>
-                    </h5>
-                    <p className="text-[11px] text-sky-700">
-                      5 Halaman &bull; Jabatan Kejuruteraan Mekanikal (Bengkel Hi-Tech) &bull; 22+ Aset Alih
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleUseSamplePdf}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition shrink-0 flex items-center gap-1.5 shadow-2xs"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Uji Ekstrak Auto Fail Ini</span>
-                </button>
-              </div>
-
             </div>
           )}
 
@@ -435,6 +577,40 @@ export default function Kewpa7UploadModal({
                 </div>
               </div>
 
+              {matchedLocation && (
+                <div className="bg-sky-50 border border-sky-300 p-3.5 rounded-xl text-sky-950 text-xs space-y-1">
+                  <div className="flex items-start gap-2">
+                    <RefreshCw className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Ruang ini sudah wujud:</strong> {matchedLocation.nama} ({matchedLocation.kodRuang}).
+                      Menyimpan akan <strong>menimpa</strong> nama, bangunan/aras, senarai aset dan penyelia lama
+                      dengan data KEW.PA-7 baharu. Dokumen lama kekal sebagai sejarah.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {extractDiagnostic && (
+                <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl text-[11px] text-rose-900 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span>
+                      Medan tidak dapat dihurai: <strong>{extractDiagnostic.missing.join(', ')}</strong>.
+                      Sila isi secara manual. Jika berulang, hantar teks di bawah kepada pentadbir sistem
+                      untuk penambahbaikan pengekstrak.
+                    </span>
+                  </div>
+                  <details className="bg-white rounded-lg border border-rose-200">
+                    <summary className="px-2 py-1 cursor-pointer font-semibold text-rose-800">
+                      Teks PDF dikesan ({extractDiagnostic.preview.length} aksara)
+                    </summary>
+                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 py-1 font-mono text-[10px] text-slate-700">
+                      {extractDiagnostic.preview}
+                    </pre>
+                  </details>
+                </div>
+              )}
+
               {/* Header Meta Prefilled Form */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between">
@@ -460,16 +636,17 @@ export default function Kewpa7UploadModal({
                       onChange={(e) => setSelectedDeptCode(e.target.value)}
                       className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:border-amber-500 focus:outline-none font-bold text-slate-900 bg-white"
                     >
-                      {DEPARTMENTS.map((dept) => (
+                      {departments.map((dept) => (
                         <option key={dept.id} value={dept.id}>
                           {dept.id} - {dept.name}
                         </option>
                       ))}
+                      {!departments.length && <option value="">Memuatkanâ€¦</option>}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Teks Bahagian Dalam KEW.PA-7</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Bahagian (Jabatan / Unit) KEW.PA-7</label>
                     <input
                       type="text"
                       value={formData.bahagian || ''}
@@ -480,12 +657,12 @@ export default function Kewpa7UploadModal({
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Nama Lokasi / Bengkel *</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Lokasi *</label>
                     <input
                       type="text"
                       value={formData.lokasi || ''}
                       onChange={(e) => setFormData({ ...formData, lokasi: e.target.value })}
-                      placeholder="cth: BENGKEL HI-TECH"
+                      placeholder="cth: BENGKEL AUTOMOTIF"
                       className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:border-amber-500 focus:outline-none font-bold text-slate-900 bg-white"
                     />
                   </div>
@@ -505,7 +682,7 @@ export default function Kewpa7UploadModal({
                 {/* Senarai Pegawai Bertanggungjawab (Multiple Responsible Officers) */}
                 <div className="pt-3 border-t border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="block font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <label className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                       <Users className="w-4 h-4 text-amber-600" />
                       <span>Senarai Pegawai Bertanggungjawab (Pengesah KEW.PA-7)</span>
                     </label>
@@ -521,33 +698,76 @@ export default function Kewpa7UploadModal({
                   </div>
 
                   <p className="text-[11px] text-slate-500">
-                    Satu lokasi boleh mempunyai pelbagai Pegawai Bertanggungjawab (Pegawai Pengesah KEW.PA-7 / Penjaga Premis).
+                    Diekstrak daripada blok <strong>(a) Disediakan oleh</strong> dan{' '}
+                    <strong>(b) Disahkan oleh</strong> â€” <strong>(b) Disahkan</strong> dianggap Penyelia Lokasi
+                    dan didahulukan. Padam mana-mana nama yang tidak berkaitan sebelum menyimpan. Nama yang
+                    tiada dalam <strong>Direktori Pegawai</strong> akan didaftarkan automatik ke direktori.
                   </p>
 
                   <div className="space-y-2 pt-1">
-                    {(formData.pegawaiBertanggungjawabList || []).map((officer, idx) => (
-                      <div key={officer.id || idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
-                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
-                          {idx + 1}
-                        </span>
+                    {(formData.pegawaiBertanggungjawabList || []).map((officer, idx) => {
+                      const matched = officers.find((item) => item.name === officer.nama);
+                      const isNew = Boolean(officer.id?.startsWith('NEW:'));
+                      const selectValue = matched
+                        ? matched.id || matched.email
+                        : isNew
+                          ? officer.id!
+                          : officer.nama
+                            ? '__MANUAL__'
+                            : '';
 
-                        <input
-                          type="text"
-                          value={officer.nama}
-                          onChange={(e) => handleUpdateOfficer(idx, 'nama', e.target.value)}
-                          placeholder="Nama Pegawai Bertanggungjawab"
-                          className="flex-1 px-2.5 py-1 text-xs border border-slate-200 rounded focus:border-amber-500 focus:outline-none font-semibold text-slate-800"
-                        />
+                      return (
+                        <div key={officer.id || idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
+                          <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
 
-                        <input
-                          type="text"
-                          value={officer.jawatan || ''}
-                          onChange={(e) => handleUpdateOfficer(idx, 'jawatan', e.target.value)}
-                          placeholder="Jawatan (cth: PPPT / Pegawai Bengkel)"
-                          className="w-48 px-2.5 py-1 text-xs border border-slate-200 rounded focus:border-amber-500 focus:outline-none font-mono text-slate-600"
-                        />
+                          <select
+                            value={selectValue}
+                            onChange={(e) => handleSelectOfficer(idx, e.target.value)}
+                            className="flex-1 px-2.5 py-1 text-xs border border-slate-200 rounded focus:border-amber-500 focus:outline-none font-semibold text-slate-800 bg-white"
+                          >
+                            <option value="">â€” Pilih Pegawai (boleh kosong) â€”</option>
+                            {officerGroups.map((group) => (
+                              <optgroup key={group.id} label={group.label}>
+                                {group.people.map((person) => {
+                                  const alreadyUsed = (formData.pegawaiBertanggungjawabList || []).some(
+                                    (item, itemIdx) => itemIdx !== idx && item.nama === person.name
+                                  );
+                                  return (
+                                    <option
+                                      key={person.id || person.email}
+                                      value={person.id || person.email}
+                                      disabled={alreadyUsed}
+                                    >
+                                      {person.name}
+                                      {person.role ? ` â€” ${person.role}` : ''}
+                                      {alreadyUsed ? ' (sudah dipilih)' : ''}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            ))}
+                            {isNew && (
+                              <optgroup label="Baharu daripada KEW.PA-7">
+                                <option value={officer.id}>
+                                  {officer.nama} â€” akan didaftarkan sebagai pengguna
+                                </option>
+                              </optgroup>
+                            )}
+                            {officer.nama && !matched && !isNew && (
+                              <option value="__MANUAL__">{officer.nama} (luar direktori)</option>
+                            )}
+                          </select>
 
-                        {(formData.pegawaiBertanggungjawabList || []).length > 1 && (
+                          <input
+                            type="text"
+                            value={officer.jawatan || ''}
+                            onChange={(e) => handleUpdateOfficer(idx, 'jawatan', e.target.value)}
+                            placeholder="Jawatan (cth: PPPT / Pegawai Bengkel)"
+                            className="w-48 px-2.5 py-1 text-xs border border-slate-200 rounded focus:border-amber-500 focus:outline-none font-mono text-slate-600"
+                          />
+
                           <button
                             type="button"
                             onClick={() => handleDeleteOfficer(idx)}
@@ -556,9 +776,23 @@ export default function Kewpa7UploadModal({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
+                        </div>
+                      );
+                    })}
+
+                    {pendingNewOfficers.length > 0 && (
+                      <div className="flex items-start gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>{pendingNewOfficers.length} pegawai baharu</strong> dikesan dalam KEW.PA-7 tetapi
+                          tiada dalam Direktori Pegawai. Mereka akan <strong>didaftarkan automatik</strong> ke
+                          direktori apabila anda menyimpan
+                          {canIssueAccounts
+                            ? ' (nama pengguna & kata laluan sementara dijana).'
+                            : '. Akaun log masuk akan dijana oleh Pentadbir Sistem.'}
+                        </span>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
 
@@ -590,7 +824,6 @@ export default function Kewpa7UploadModal({
                           <th className="py-2.5 px-3 w-10 text-center border-b border-slate-800">Bil</th>
                           <th className="py-2.5 px-3 min-w-[160px] border-b border-slate-800">No. Siri Pendaftaran</th>
                           <th className="py-2.5 px-3 min-w-[280px] border-b border-slate-800">Keterangan Aset</th>
-                          <th className="py-2.5 px-3 min-w-[110px] border-b border-slate-800">Tarikh Penempatan</th>
                           <th className="py-2.5 px-3 min-w-[110px] border-b border-slate-800">Status Fizikal</th>
                           <th className="py-2.5 px-2 w-12 text-center border-b border-slate-800">Padam</th>
                         </tr>
@@ -598,7 +831,7 @@ export default function Kewpa7UploadModal({
                       <tbody className="divide-y divide-slate-200 bg-white">
                         {formData.senaraiAset?.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-400">
+                            <td colSpan={5} className="py-8 text-center text-slate-400">
                               Tiada aset diekstrak. Sila klik &ldquo;Tambah Baris Aset&rdquo;.
                             </td>
                           </tr>
@@ -624,15 +857,6 @@ export default function Kewpa7UploadModal({
                                   value={item.keteranganAset}
                                   onChange={(e) => handleUpdateAssetRow(idx, 'keteranganAset', e.target.value)}
                                   className="w-full px-2 py-1 text-xs border border-slate-200 rounded text-slate-800 focus:border-amber-500 focus:outline-none"
-                                />
-                              </td>
-
-                              <td className="py-2 px-3">
-                                <input
-                                  type="text"
-                                  value={item.tarikhPenempatan}
-                                  onChange={(e) => handleUpdateAssetRow(idx, 'tarikhPenempatan', e.target.value)}
-                                  className="w-full px-2 py-1 text-xs border border-slate-200 rounded font-mono text-slate-700 focus:border-amber-500 focus:outline-none text-center"
                                 />
                               </td>
 
@@ -703,16 +927,88 @@ export default function Kewpa7UploadModal({
               <button
                 type="button"
                 onClick={handleSaveToD1}
-                className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-xs"
+                disabled={isSaving}
+                className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <Database className="w-4 h-4 text-slate-950" />
-                <span>Simpan Kemaskini Aset ke D1</span>
+                <span>
+                  {isSaving
+                    ? 'Menyimpan...'
+                    : matchedLocation
+                      ? 'Kemaskini Ruang (Timpa Data Lama)'
+                      : 'Simpan Kemaskini Aset ke D1'}
+                </span>
               </button>
             )}
           </div>
         </div>
 
       </div>
+
+      {/* Kredensial pegawai baharu â€” dipaparkan sekali sahaja */}
+      {issuedOfficers && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="bg-emerald-600 text-white p-4 flex items-center gap-2">
+              <UserCheck className="w-5 h-5" />
+              <div>
+                <h3 className="font-bold text-sm">Pegawai berjaya didaftarkan</h3>
+                <p className="text-[11px] text-emerald-100">
+                  KEW.PA-7 disimpan dan pegawai dilantik sebagai Penyelia Lokasi ruang ini.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  Kata laluan sementara dipaparkan <strong>sekali sahaja</strong>. Serahkan kepada pegawai;
+                  mereka wajib menukarnya semasa log masuk pertama.
+                </span>
+              </div>
+
+              {issuedOfficers.map((item, index) => (
+                <div key={index} className="border border-slate-200 rounded-xl p-3 space-y-1.5">
+                  <div className="font-bold text-sm text-slate-900">{item.nama}</div>
+                  {item.credentials ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 text-xs font-mono">
+                        <span className="text-slate-500">Nama pengguna</span>
+                        <span className="font-bold text-slate-900 select-all">{item.credentials.username}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-xs font-mono">
+                        <span className="text-slate-500">Kata laluan sementara</span>
+                        <span className="font-bold text-emerald-700 select-all">
+                          {item.credentials.temporaryPassword}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-slate-600">
+                      Didaftarkan dalam direktori. Akaun log masuk akan dijana oleh{' '}
+                      <strong>Pentadbir Sistem</strong> melalui Direktori Pegawai.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIssuedOfficers(null);
+                  onClose();
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

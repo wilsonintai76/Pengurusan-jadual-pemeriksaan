@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { 
   Search, 
@@ -23,7 +21,7 @@ import {
   X
 } from 'lucide-react';
 import { InspectionSchedule, UserSession, InspectionStatus } from '@/lib/types';
-import { CROSS_PAIRS } from '@/lib/initialData';
+import { useCrossPairs } from '@/lib/useReferenceData';
 
 interface EjasSectionProps {
   schedules: InspectionSchedule[];
@@ -52,6 +50,7 @@ export default function EjasSection({
   onExportCSV,
   onPrintKewpa10,
 }: EjasSectionProps) {
+  const crossPairs = useCrossPairs();
   const [currentView, setCurrentView] = useState<'table' | 'kanban'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDept, setFilterDept] = useState('SEMUA');
@@ -60,7 +59,7 @@ export default function EjasSection({
   const [filterMyTasksOnly, setFilterMyTasksOnly] = useState(false);
 
   const myDept = currentUser?.dept || 'JTMK';
-  const crossPartner = CROSS_PAIRS[myDept] || 'JKE';
+  const crossPartner = crossPairs[myDept] || Object.keys(crossPairs)[0] || '';
 
   // Calculate my inspection count
   const myTasksCount = schedules.filter((s) => {
@@ -245,7 +244,7 @@ export default function EjasSection({
               className="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="SEMUA">Semua Jabatan</option>
-              {Object.keys(CROSS_PAIRS).map((d) => (
+              {Object.keys(crossPairs).map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>
@@ -307,7 +306,7 @@ export default function EjasSection({
         ) : (
           <div className="flex items-center gap-2 text-[11px] text-slate-400 flex-wrap pt-0.5">
             <span className="font-medium text-slate-500">Cadangan carian pantas:</span>
-            {['Makmal', 'Bengkel', 'JTMK', 'JKE', 'En. Wilson'].map((tag) => (
+            {['Makmal', 'Bengkel', ...Object.keys(crossPairs)].map((tag) => (
               <button
                 key={tag}
                 type="button"

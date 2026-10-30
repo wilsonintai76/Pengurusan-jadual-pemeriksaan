@@ -1,13 +1,12 @@
-'use client';
-
 import React, { useState } from 'react';
-import { X, Crosshair, ShieldCheck, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { InspectionSchedule, UserSession } from '@/lib/types';
-import { CROSS_PAIRS } from '@/lib/initialData';
+import { X, Crosshair, ShieldCheck, ShieldAlert, CheckCircle2, CalendarClock } from 'lucide-react';
+import { AppointmentSummary, InspectionSchedule, UserSession } from '@/lib/types';
+import { useCrossPairs } from '@/lib/useReferenceData';
 
 interface ClaimLocationModalProps {
   schedules: InspectionSchedule[];
   currentUser: UserSession | null;
+  appointment?: AppointmentSummary | null;
   onClose: () => void;
   onClaimSlot: (scheduleId: string, slot: 1 | 2) => void;
 }
@@ -15,16 +14,23 @@ interface ClaimLocationModalProps {
 export default function ClaimLocationModal({
   schedules,
   currentUser,
+  appointment,
   onClose,
   onClaimSlot,
 }: ClaimLocationModalProps) {
+  const crossPairs = useCrossPairs();
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('');
 
-  const myDept = currentUser?.dept || 'JTMK';
-  const defaultTargetDept = CROSS_PAIRS[myDept] || 'JKE';
+  const myDept = currentUser?.dept || '';
+  const defaultTargetDept = crossPairs[myDept] || Object.keys(crossPairs)[0] || '';
   const targetDept = selectedDeptFilter || defaultTargetDept;
 
   const targetList = schedules.filter((s) => s.jabatan === targetDept);
+  const canClaim = appointment ? appointment.activeToday : true;
+  const expiringSoon =
+    appointment?.activeToday &&
+    typeof appointment.daysRemaining === 'number' &&
+    appointment.daysRemaining <= 60;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
@@ -54,6 +60,43 @@ export default function ClaimLocationModal({
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm flex-1">
           
+          {/* Status lantikan pemeriksa (tarikh luput) */}
+          <div
+            className={`p-3 rounded-2xl border flex items-start gap-2.5 text-xs ${
+              !appointment || !appointment.activeToday
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : expiringSoon
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {!appointment || !appointment.activeToday ? (
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+            ) : (
+              <CalendarClock className="w-4 h-4 shrink-0 mt-0.5" />
+            )}
+            <div className="leading-relaxed">
+              {!appointment ? (
+                <span>
+                  Akaun anda tiada <strong>lantikan Pegawai Pemeriksa</strong>. Tuntutan slot akan ditolak
+                  oleh pelayan sehingga lantikan diberikan.
+                </span>
+              ) : appointment.activeToday ? (
+                <span>
+                  <strong>Lantikan Pegawai Pemeriksa aktif</strong> — sah sehingga{' '}
+                  <span className="font-mono font-bold">{appointment.validTo ?? 'kekal'}</span>
+                  {expiringSoon && ` (${appointment.daysRemaining} hari lagi — mohon pembaharuan)`}.
+                </span>
+              ) : (
+                <span>
+                  <strong>Lantikan pemeriksa telah tamat</strong> pada{' '}
+                  <span className="font-mono font-bold">{appointment.validTo ?? '-'}</span>. Hanya pegawai
+                  yang dilantik boleh melaksanakan pemeriksaan — hubungi Pentadbir Sistem untuk pembaharuan.
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Target Dept Banner */}
           <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
@@ -76,7 +119,7 @@ export default function ClaimLocationModal({
                 onChange={(e) => setSelectedDeptFilter(e.target.value)}
                 className="text-xs py-1.5 px-2.5 rounded-lg border border-teal-300 bg-white font-bold text-teal-950 focus:outline-none"
               >
-                {Object.keys(CROSS_PAIRS).map((d) => (
+                {Object.keys(crossPairs).map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -146,7 +189,8 @@ export default function ClaimLocationModal({
                           ) : (
                             <button
                               onClick={() => onClaimSlot(item.id, 1)}
-                              className="px-3 py-1 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition"
+                              disabled={!canClaim}
+                              className="px-3 py-1 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Tuntut P1
                             </button>
@@ -162,7 +206,8 @@ export default function ClaimLocationModal({
                           ) : (
                             <button
                               onClick={() => onClaimSlot(item.id, 2)}
-                              className="px-3 py-1 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition"
+                              disabled={!canClaim}
+                              className="px-3 py-1 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Tuntut P2
                             </button>

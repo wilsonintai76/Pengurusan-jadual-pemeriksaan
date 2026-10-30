@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useMemo } from 'react';
 import { 
   Users, 
@@ -8,7 +6,6 @@ import {
   Edit3, 
   Trash2, 
   Eye, 
-  UserCheck, 
   CheckCircle2, 
   AlertTriangle, 
   X, 
@@ -24,86 +21,120 @@ import {
   SlidersHorizontal, 
   Clock, 
   Briefcase,
-  BadgeCheck
+  BadgeCheck,
+  Copy,
+  KeyRound
 } from 'lucide-react';
-import { DEPARTMENTS, CROSS_PAIRS, INITIAL_USERS } from '@/lib/initialData';
-import { UserSession, SystemRole } from '@/lib/types';
+import { useDepartments } from '@/lib/useReferenceData';
+import { UserSession, SystemRole, DepartmentInfo, LocationInfo } from '@/lib/types';
+import PerananLantikanSection from '@/components/PerananLantikanSection';
+import type { IssuedCredentials, NewOfficerInput } from '@/lib/dataApi';
+import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN } from '@/lib/systemRoles';
 
 interface DirektoriSectionProps {
   currentUser?: UserSession | null;
   users?: UserSession[];
-  onSwitchUser?: (user: UserSession) => void;
-  onAddUser?: (user: UserSession) => void;
+  /** Pendaftaran hanya untuk pentadbir: Worker menjana nama pengguna & kata laluan. */
+  onCreateOfficer?: (
+    input: NewOfficerInput
+  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials }>;
+  onResetCredentials?: (user: UserSession) => Promise<IssuedCredentials>;
+  /** Tetapkan jawatan utama (memerlukan lantikan aktif bagi peranan itu). */
+  onSetPrimaryRole?: (user: UserSession, roleId: string) => Promise<void>;
   onUpdateUser?: (user: UserSession) => void;
   onDeleteUser?: (userEmail: string) => void;
+  canManage?: boolean;
+  /** Senarai jabatan & lokasi untuk pengurusan lantikan (sub-tab). */
+  departments?: DepartmentInfo[];
+  locations?: LocationInfo[];
+  onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  /** Dipanggil selepas lantikan berubah supaya App memuat semula data. */
+  onRolesChanged?: () => void;
 }
 
-const OFFICIAL_ROLES: SystemRole[] = [
-  'Ketua Jabatan',
-  'Ketua Program',
-  'Penolong Pegawai Aset Jabatan/Unit',
-  'Penyelia Lokasi',
-  'Pentadbir Sistem',
-  'Pegawai Pemeriksa',
-];
-
+/** Konfigurasi warna lencana mengikut id peranan (lihat lib/systemRoles.ts). */
 const ROLE_CONFIG: Record<
-  string, 
+  string,
   { bg: string; text: string; border: string; badge: string; iconBg: string }
 > = {
-  'Ketua Jabatan': {
+  KETUA_JABATAN: {
     bg: 'bg-purple-50',
     text: 'text-purple-900',
     border: 'border-purple-200',
     badge: 'bg-purple-100 text-purple-900 border-purple-300',
     iconBg: 'bg-purple-700 text-white',
   },
-  'Ketua Program': {
+  KETUA_PROGRAM: {
     bg: 'bg-blue-50',
     text: 'text-blue-900',
     border: 'border-blue-200',
     badge: 'bg-blue-100 text-blue-900 border-blue-300',
     iconBg: 'bg-blue-700 text-white',
   },
-  'Penolong Pegawai Aset Jabatan/Unit': {
+  PEGAWAI_ASET: {
+    bg: 'bg-indigo-50',
+    text: 'text-indigo-900',
+    border: 'border-indigo-200',
+    badge: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+    iconBg: 'bg-indigo-700 text-white',
+  },
+  PENOLONG_PEGAWAI_ASET: {
     bg: 'bg-amber-50',
     text: 'text-amber-900',
     border: 'border-amber-200',
     badge: 'bg-amber-100 text-amber-900 border-amber-300',
     iconBg: 'bg-amber-600 text-white',
   },
-  'Penyelia Lokasi': {
+  PENYELIA_LOKASI: {
     bg: 'bg-cyan-50',
     text: 'text-cyan-900',
     border: 'border-cyan-200',
     badge: 'bg-cyan-100 text-cyan-900 border-cyan-300',
     iconBg: 'bg-cyan-700 text-white',
   },
-  'Pentadbir Sistem': {
-    bg: 'bg-rose-50',
-    text: 'text-rose-900',
-    border: 'border-rose-200',
-    badge: 'bg-rose-100 text-rose-900 border-rose-300',
-    iconBg: 'bg-rose-700 text-white',
-  },
-  'Pegawai Pemeriksa': {
+  PEMERIKSA: {
     bg: 'bg-emerald-50',
     text: 'text-emerald-900',
     border: 'border-emerald-200',
     badge: 'bg-emerald-100 text-emerald-900 border-emerald-300',
     iconBg: 'bg-emerald-700 text-white',
   },
+  PENTADBIR_SISTEM: {
+    bg: 'bg-rose-50',
+    text: 'text-rose-900',
+    border: 'border-rose-200',
+    badge: 'bg-rose-100 text-rose-900 border-rose-300',
+    iconBg: 'bg-rose-700 text-white',
+  },
 };
 
+const DEFAULT_ROLE_CONFIG = {
+  bg: 'bg-slate-50',
+  text: 'text-slate-900',
+  border: 'border-slate-200',
+  badge: 'bg-slate-100 text-slate-800 border-slate-300',
+  iconBg: 'bg-slate-700 text-white',
+};
 export default function DirektoriSection({
   currentUser,
-  users = INITIAL_USERS,
-  onSwitchUser,
-  onAddUser,
+  users = [],
+  onCreateOfficer,
+  onResetCredentials,
+  onSetPrimaryRole,
   onUpdateUser,
   onDeleteUser,
+  canManage = false,
+  departments: departmentsProp,
+  locations = [],
+  onShowToast,
+  onRolesChanged,
 }: DirektoriSectionProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'crudTable' | 'crossMatrix'>('crudTable');
+  const [issued, setIssued] = useState<IssuedCredentials | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [issuedFor, setIssuedFor] = useState<string>('');
+  const referenceDepartments = useDepartments();
+  const departments = departmentsProp ?? referenceDepartments;
+  const [activeSubTab, setActiveSubTab] = useState<'crudTable' | 'roles'>('crudTable');
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,11 +154,11 @@ export default function DirektoriSection({
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    dept: 'JTMK',
-    role: 'Pegawai Pemeriksa' as SystemRole,
-    grade: 'DH41',
-    phone: '082-845500',
-    ext: '100',
+    dept: '',
+    role: DEFAULT_JAWATAN,
+    grade: '',
+    phone: '',
+    ext: '',
     roomAssigned: '',
     programmeAssigned: '',
     status: 'Aktif' as 'Aktif' | 'Cuti' | 'Tidak Aktif',
@@ -135,16 +166,26 @@ export default function DirektoriSection({
 
   const [formError, setFormError] = useState('');
 
+  const copyToClipboard = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // penyemak imbas menyekat clipboard — nilai masih kelihatan pada skrin
+    }
+  };
+
   // Open add modal
   const handleOpenAddModal = () => {
+    setIssued(null);
+    setIssuedFor('');
     setFormData({
       name: '',
       email: '',
-      dept: 'JTMK',
-      role: 'Pegawai Pemeriksa',
-      grade: 'DH41',
-      phone: '082-845500',
-      ext: '100',
+      dept: departments[0]?.id ?? '',
+      role: DEFAULT_JAWATAN,
+      grade: '',
+      phone: '',
+      ext: '',
       roomAssigned: '',
       programmeAssigned: '',
       status: 'Aktif',
@@ -160,10 +201,10 @@ export default function DirektoriSection({
       name: user.name,
       email: user.email,
       dept: user.dept,
-      role: (OFFICIAL_ROLES.includes(user.role as SystemRole) ? user.role : 'Pegawai Pemeriksa') as SystemRole,
-      grade: user.grade || 'DH41',
-      phone: user.phone || '082-845500',
-      ext: user.ext || '100',
+      role: (ROLE_LABELS_JAWATAN.includes(user.role as SystemRole) ? user.role : DEFAULT_JAWATAN) as SystemRole,
+      grade: user.grade || '',
+      phone: user.phone || '',
+      ext: user.ext || '',
       roomAssigned: user.roomAssigned || '',
       programmeAssigned: user.programmeAssigned || '',
       status: (user.status || 'Aktif') as 'Aktif' | 'Cuti' | 'Tidak Aktif',
@@ -171,41 +212,91 @@ export default function DirektoriSection({
     setFormError('');
   };
 
-  // Submit Add
-  const handleSaveNewUser = (e: React.FormEvent) => {
+  // Submit Add — Worker menjana nama pengguna & kata laluan sementara
+  const handleSaveNewUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+
     if (!formData.name.trim()) {
       setFormError('Sila masukkan nama penuh pegawai.');
       return;
     }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      setFormError('Sila masukkan emel rasmi yang sah.');
+    if (!formData.dept) {
+      setFormError('Sila pilih jabatan / unit.');
       return;
     }
-    // Check if email already exists
-    if (users.some((u) => u.email.toLowerCase() === formData.email.trim().toLowerCase())) {
-      setFormError('Emel ini telah didaftarkan dalam sistem. Sila gunakan emel lain.');
+    if (!onCreateOfficer) {
+      setFormError('Pendaftaran pegawai hanya boleh dibuat oleh Pentadbir Sistem.');
       return;
     }
 
-    const newUser: UserSession = {
-      id: `USR-${Date.now().toString().slice(-4)}`,
-      name: formData.name.trim(),
-      email: formData.email.trim().toLowerCase(),
-      dept: formData.dept,
-      role: formData.role,
-      grade: formData.grade.trim() || 'DH41',
-      phone: formData.phone.trim() || '082-845500',
-      ext: formData.ext.trim() || '100',
-      roomAssigned: formData.roomAssigned.trim() || undefined,
-      programmeAssigned: formData.programmeAssigned.trim() || undefined,
-      status: formData.status,
-    };
-
-    if (onAddUser) {
-      onAddUser(newUser);
+    const email = formData.email.trim().toLowerCase();
+    if (email && !email.includes('@')) {
+      setFormError('Sila masukkan emel rasmi yang sah atau biarkan kosong.');
+      return;
     }
-    setShowAddModal(false);
+
+    setFormError('');
+    setIsSaving(true);
+    try {
+      const { officer, credentials } = await onCreateOfficer({
+        nama: formData.name.trim(),
+        dept: formData.dept,
+        role: formData.role,
+        gred: formData.grade.trim() || undefined,
+        telefon: formData.phone.trim() || undefined,
+        sambungan: formData.ext.trim() || undefined,
+        emel: email || undefined,
+      });
+      setIssued(credentials);
+      setIssuedFor(`${officer.name} (${officer.dept})`);
+      setFormData({
+        name: '',
+        email: '',
+        dept: '',
+        role: DEFAULT_JAWATAN,
+        grade: '',
+        phone: '',
+        ext: '',
+        roomAssigned: '',
+        programmeAssigned: '',
+        status: 'Aktif',
+      });
+    } catch (error) {
+      setFormError((error as Error).message || 'Pendaftaran pegawai gagal.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Jana semula kata laluan sementara
+  const handleResetCredentials = async (user: UserSession) => {
+    if (!onResetCredentials || isSaving) return;
+    setFormError('');
+    setIsSaving(true);
+    try {
+      const credentials = await onResetCredentials(user);
+      setIssued(credentials);
+      setIssuedFor(`${user.name} (${user.dept})`);
+    } catch (error) {
+      setFormError((error as Error).message || 'Gagal menjana kata laluan.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  // Tetapkan jawatan utama
+  const handleSetPrimary = async (user: UserSession, roleId: string) => {
+    if (!onSetPrimaryRole || isSaving) return;
+    setFormError('');
+    setIsSaving(true);
+    try {
+      await onSetPrimaryRole(user, roleId);
+      setViewingUser(null);
+    } catch (error) {
+      setFormError((error as Error).message || 'Gagal menetapkan jawatan utama.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Submit Edit
@@ -217,14 +308,17 @@ export default function DirektoriSection({
       return;
     }
 
+    const isJawatan = ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole);
+
     const updated: UserSession = {
       ...editingUser,
       name: formData.name.trim(),
       dept: formData.dept,
-      role: formData.role,
-      grade: formData.grade.trim() || 'DH41',
-      phone: formData.phone.trim() || '082-845500',
-      ext: formData.ext.trim() || '100',
+      // Peranan sistem (lantikan) tidak boleh diubah dari direktori.
+      role: isJawatan ? formData.role : editingUser.role,
+      grade: formData.grade.trim(),
+      phone: formData.phone.trim() || undefined,
+      ext: formData.ext.trim() || undefined,
       roomAssigned: formData.roomAssigned.trim() || undefined,
       programmeAssigned: formData.programmeAssigned.trim() || undefined,
       status: formData.status,
@@ -262,20 +356,27 @@ export default function DirektoriSection({
     URL.revokeObjectURL(url);
   };
 
+  // Kiraan lantikan & pegawai berbilang peranan
+  const appointedInspectors = useMemo(
+    () =>
+      users.filter((user) => (user.roles ?? []).some((r) => r.roleId === 'PEMERIKSA')).length,
+    [users]
+  );
+
+  const multiRoleCount = useMemo(
+    () => users.filter((user) => (user.roles ?? []).length > 1).length,
+    [users]
+  );
+
   // Count by roles
   const roleCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      'Ketua Jabatan': 0,
-      'Ketua Program': 0,
-      'Penolong Pegawai Aset Jabatan/Unit': 0,
-      'Penyelia Lokasi': 0,
-      'Pentadbir Sistem': 0,
-      'Pegawai Pemeriksa': 0,
-    };
+    const counts: Record<string, number> = ROLE_LABELS.reduce<Record<string, number>>(
+      (acc, label) => ({ ...acc, [label]: 0 }),
+      {}
+    );
     users.forEach((u) => {
-      if (counts[u.role] !== undefined) {
-        counts[u.role] += 1;
-      }
+      const label = normalizeRole(u.role);
+      counts[label] = (counts[label] ?? 0) + 1;
     });
     return counts;
   }, [users]);
@@ -291,7 +392,7 @@ export default function DirektoriSection({
         (u.programmeAssigned && u.programmeAssigned.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (u.ext && u.ext.includes(searchQuery));
 
-      const matchesRole = roleFilter === 'SEMUA' || u.role === roleFilter;
+      const matchesRole = roleFilter === 'SEMUA' || normalizeRole(u.role) === roleFilter;
       const matchesDept = deptFilter === 'SEMUA' || u.dept === deptFilter;
       const matchesStatus = statusFilter === 'SEMUA' || (u.status || 'Aktif') === statusFilter;
 
@@ -318,16 +419,6 @@ export default function DirektoriSection({
     (statusFilter !== 'SEMUA' ? 1 : 0) + 
     (searchQuery.trim() ? 1 : 0);
 
-  // Cross pairs list deduplicated
-  const pairedCards = [
-    { a: 'JTMK', b: 'JKE', nameA: 'Jabatan Teknologi Maklumat & Komunikasi', nameB: 'Jabatan Kejuruteraan Elektrik' },
-    { a: 'JKM', b: 'JKA', nameA: 'Jabatan Kejuruteraan Mekanikal', nameB: 'Jabatan Kejuruteraan Awam' },
-    { a: 'JP', b: 'JPA', nameA: 'Jabatan Perdagangan', nameB: 'Jabatan Pengajian Am' },
-    { a: 'JMSK', b: 'PENTADBIRAN', nameA: 'Jabatan Matematik, Sains & Komputer', nameB: 'Pentadbiran & Unit Pengurusan Aset' },
-    { a: 'HAL EHWAL PELAJAR', b: 'PSA', nameA: 'Jabatan Hal Ehwal Pelajar (JHEP)', nameB: 'Perpustakaan Tan Sri Hamdan' },
-    { a: 'CISEC', b: 'ULPL', nameA: 'CISEC', nameB: 'Unit Latihan & Pendidikan Lanjutan' },
-  ];
-
   return (
     <div className="space-y-6">
       
@@ -340,10 +431,21 @@ export default function DirektoriSection({
               <span>Pengurusan Pengguna Berpusat (CRUD Direktori)</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-              Jadual Direktori Pegawai & 6 Peranan Rasmi POLIKU
+              Direktori Pegawai POLIKU
             </h1>
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                {users.length} pegawai
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                {appointedInspectors} dilantik PP
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                {multiRoleCount} berbilang peranan
+              </span>
+            </div>
             <p className="text-xs sm:text-sm text-slate-500 max-w-3xl leading-relaxed">
-              Pusat pendaftaran, kemaskini maklumat pegawai, dan pemetaan peranan tadbir urus aset alih kerajaan berpandukan tatacara 1PP AM 2.4. Menyokong penukaran sesi akaun pantas untuk pengujian sistem secara masa nyata.
+              Pusat pendaftaran, kemaskini maklumat pegawai, dan pemetaan peranan tadbir urus aset alih kerajaan berpandukan tatacara 1PP AM 2.4. Akaun pegawai hanya didaftarkan oleh Pentadbir Sistem; nama pengguna dan kata laluan sementara dijana automatik oleh Worker.
             </p>
           </div>
 
@@ -357,43 +459,44 @@ export default function DirektoriSection({
               <span>Eksport CSV</span>
             </button>
 
-            <button
-              onClick={handleOpenAddModal}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition flex items-center gap-2 shadow-xs"
-            >
-              <Plus className="w-4 h-4 text-amber-400" />
-              <span>Daftar Pegawai Baru</span>
-            </button>
+            {canManage && (
+              <button
+                onClick={handleOpenAddModal}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition flex items-center gap-2 shadow-xs"
+                title="Akaun pegawai didaftarkan oleh Pentadbir Sistem — kredensial dijana automatik"
+              >
+                <Plus className="w-4 h-4 text-amber-400" />
+                <span>Daftar Pegawai Baru</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 2. Role KPI Breakdown Chips (6 Official Roles) */}
+        {/* 2. KPI Jawatan (1 pegawai = 1 jawatan hakiki) */}
         <div className="pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {OFFICIAL_ROLES.map((role) => {
-            const count = roleCounts[role] || 0;
-            const cfg = ROLE_CONFIG[role] || { badge: 'bg-slate-100 text-slate-800 border-slate-200' };
-            const isSelected = roleFilter === role;
+          {JAWATAN_ROLES.map((jawatan) => {
+            const count = roleCounts[jawatan.label] || 0;
+            const cfg = ROLE_CONFIG[jawatan.id] ?? DEFAULT_ROLE_CONFIG;
+            const isSelected = roleFilter === jawatan.label;
 
             return (
               <button
-                key={role}
-                onClick={() => setRoleFilter(isSelected ? 'SEMUA' : role)}
+                key={jawatan.id}
+                onClick={() => setRoleFilter(isSelected ? 'SEMUA' : jawatan.label)}
                 className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between gap-1.5 ${
-                  isSelected
-                    ? 'ring-2 ring-slate-900 shadow-xs'
-                    : 'hover:border-slate-300'
+                  isSelected ? 'ring-2 ring-slate-900 shadow-xs' : 'hover:border-slate-300'
                 } ${cfg.bg} ${cfg.border}`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-extrabold uppercase tracking-tight text-slate-600 font-mono">
-                    {role.includes('Penolong') ? 'Penolong Aset' : role}
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-tight text-slate-600 font-mono truncate">
+                    {jawatan.short}
                   </span>
                   <span className={`text-xs font-mono font-extrabold px-1.5 py-0.2 rounded-md ${cfg.badge}`}>
                     {count}
                   </span>
                 </div>
-                <span className="text-[11px] font-bold text-slate-900 truncate">
-                  {role}
+                <span className="text-[11px] font-bold text-slate-900 leading-tight">
+                  {jawatan.label}
                 </span>
               </button>
             );
@@ -418,18 +521,32 @@ export default function DirektoriSection({
           </span>
         </button>
 
+
+
         <button
-          onClick={() => setActiveSubTab('crossMatrix')}
+          onClick={() => setActiveSubTab('roles')}
           className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition flex items-center gap-2 ${
-            activeSubTab === 'crossMatrix'
+            activeSubTab === 'roles'
               ? 'border-slate-900 text-slate-950 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <ArrowLeftRight className="w-4 h-4 text-teal-600" />
-          <span>Matriks Padanan Silang (⇄ 1PP AM 2.4)</span>
+          <ShieldCheck className="w-4 h-4 text-indigo-600" />
+          <span>Peranan &amp; Lantikan</span>
         </button>
       </div>
+
+      {activeSubTab === 'roles' && (
+        <PerananLantikanSection
+          officers={users}
+          departments={departments}
+          locations={locations}
+          canManage={canManage}
+          onShowToast={onShowToast ?? (() => undefined)}
+          onCreateOfficer={onCreateOfficer}
+          onChanged={onRolesChanged}
+        />
+      )}
 
       {activeSubTab === 'crudTable' && (
         <div className="space-y-4">
@@ -445,7 +562,7 @@ export default function DirektoriSection({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari nama, emel, sambungan ext, atau bilik jagaan..."
+                  placeholder="Cari nama, emel, no. tel bimbit, atau bilik jagaan..."
                   className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900 transition"
                 />
                 {searchQuery && (
@@ -465,8 +582,8 @@ export default function DirektoriSection({
                   onChange={(e) => setRoleFilter(e.target.value)}
                   className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-medium text-slate-700"
                 >
-                  <option value="SEMUA">Semua Peranan Rasmi (6 Peranan)</option>
-                  {OFFICIAL_ROLES.map((r) => (
+                  <option value="SEMUA">Semua Peranan Rasmi</option>
+                  {REGISTRATION_ROLES.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
@@ -480,7 +597,7 @@ export default function DirektoriSection({
                   className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-medium text-slate-700 font-mono"
                 >
                   <option value="SEMUA">Semua Jabatan</option>
-                  {DEPARTMENTS.map((d) => (
+                  {departments.map((d) => (
                     <option key={d.id} value={d.id}>{d.id}</option>
                   ))}
                 </select>
@@ -533,7 +650,7 @@ export default function DirektoriSection({
                   <option value="name">Nama Pegawai</option>
                   <option value="dept">Jabatan</option>
                   <option value="role">Peranan Rasmi</option>
-                  <option value="grade">Gred Jawatan</option>
+                  <option value="grade">No. Tel Bimbit</option>
                 </select>
                 <button
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
@@ -554,10 +671,10 @@ export default function DirektoriSection({
                   <tr>
                     <th className="py-3.5 px-3 text-center w-12 text-slate-300 border-b border-slate-800">#</th>
                     <th className="py-3.5 px-4 min-w-[210px] text-slate-100 border-b border-slate-800">Maklumat Pegawai & Emel</th>
-                    <th className="py-3.5 px-4 min-w-[210px] text-slate-100 border-b border-slate-800">Peranan Rasmi (6 Peranan)</th>
-                    <th className="py-3.5 px-3 min-w-[120px] text-slate-100 border-b border-slate-800">Jabatan & Gred</th>
+                    <th className="py-3.5 px-4 min-w-[210px] text-slate-100 border-b border-slate-800">Peranan / Jawatan</th>
+                    <th className="py-3.5 px-3 min-w-[120px] text-slate-100 border-b border-slate-800">Jabatan</th>
                     <th className="py-3.5 px-4 min-w-[190px] text-slate-100 border-b border-slate-800">Skop Tugas / Bilik / Program</th>
-                    <th className="py-3.5 px-3 min-w-[110px] text-slate-100 border-b border-slate-800">Tel & Samb.</th>
+                    <th className="py-3.5 px-3 min-w-[110px] text-slate-100 border-b border-slate-800">No. Tel Bimbit</th>
                     <th className="py-3.5 px-3 text-center min-w-[85px] text-slate-100 border-b border-slate-800">Status</th>
                     <th className="py-3.5 px-4 text-center min-w-[150px] text-slate-100 border-b border-slate-800">Tindakan CRUD</th>
                   </tr>
@@ -575,7 +692,7 @@ export default function DirektoriSection({
                   ) : (
                     filteredUsers.map((user, idx) => {
                       const isCurrentActive = currentUser?.email === user.email;
-                      const roleConfig = ROLE_CONFIG[user.role] || {
+                      const roleConfig = ROLE_CONFIG[roleIdOf(user.role) ?? ''] ?? {
                         badge: 'bg-slate-100 text-slate-800 border-slate-200',
                         text: 'text-slate-800',
                         iconBg: 'bg-slate-800 text-white',
@@ -625,18 +742,41 @@ export default function DirektoriSection({
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border font-mono ${roleConfig.badge}`}>
                               <BadgeCheck className="w-3.5 h-3.5 shrink-0" />
-                              <span>{user.role}</span>
+                              <span>{roleShort(user.role)}</span>
+                              <span className="font-medium opacity-70">{user.role.replace(/\s*\([^)]*\)$/, '')}</span>
                             </span>
+                            {(user.roles ?? []).filter((r) => r.roleId !== roleIdOf(user.role)).length > 0 && (
+                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                {(user.roles ?? [])
+                                  .filter((r) => r.roleId !== roleIdOf(user.role))
+                                  .map((r, index) => (
+                                    <span
+                                      key={`${r.roleId}-${r.scopeId ?? 'g'}-${index}`}
+                                      title={`${r.roleName} · ${r.scopeType}${
+                                        r.scopeId ? ` ${r.scopeId}` : ''
+                                      }${r.validTo ? ` · tamat ${r.validTo}` : ' · kekal'}`}
+                                      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[9px] font-bold ${
+                                        r.kategori === 'LANTIKAN'
+                                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                          : 'border-slate-200 bg-slate-50 text-slate-600'
+                                      }`}
+                                    >
+                                      + {roleShort(r.roleId)}
+                                      {r.scopeType === 'LOCATION' && r.scopeId ? ` ${r.scopeId}` : ''}
+                                    </span>
+                                  ))}
+                              </div>
+                            )}
                           </td>
 
-                          {/* 4. Dept & Grade */}
+                          {/* 4. Dept & No. Tel Bimbit */}
                           <td className="py-3.5 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col items-start gap-1">
                               <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white font-mono text-[10px] font-bold">
                                 {user.dept}
                               </span>
                               <span className="text-slate-600 font-mono text-[11px] font-semibold">
-                                {user.grade || 'DH41'}
+                                {user.phone || '—'}
                               </span>
                             </div>
                           </td>
@@ -662,10 +802,9 @@ export default function DirektoriSection({
                             )}
                           </td>
 
-                          {/* 6. Phone & Extension */}
+                          {/* 6. No. Tel Bimbit */}
                           <td className="py-3.5 px-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">
-                            <div>{user.phone || '082-845500'}</div>
-                            <div className="text-[10px] text-slate-400">Ext: {user.ext || '100'}</div>
+                            {user.phone || '—'}
                           </td>
 
                           {/* 7. Status */}
@@ -698,43 +837,31 @@ export default function DirektoriSection({
                               </button>
 
                               {/* Edit button */}
-                              <button
-                                onClick={() => handleOpenEditModal(user)}
-                                className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition"
-                                title="Kemaskini Maklumat Pegawai"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-
-                              {/* Switch user / login as button */}
-                              {onSwitchUser && (
+                              {canManage && (
                                 <button
-                                  onClick={() => onSwitchUser(user)}
-                                  disabled={isCurrentActive}
-                                  className={`p-1.5 rounded-lg transition ${
-                                    isCurrentActive
-                                      ? 'text-emerald-700 bg-emerald-50 cursor-default'
-                                      : 'text-amber-600 hover:text-amber-800 hover:bg-amber-50'
-                                  }`}
-                                  title={isCurrentActive ? 'Akaun sedang aktif' : 'Tukar ke Akaun Ini (Uji Peranan)'}
+                                  onClick={() => handleOpenEditModal(user)}
+                                  className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition"
+                                  title="Kemaskini Maklumat Pegawai"
                                 >
-                                  <UserCheck className="w-4 h-4" />
+                                  <Edit3 className="w-4 h-4" />
                                 </button>
                               )}
 
                               {/* Delete button */}
-                              <button
-                                onClick={() => setDeletingUser(user)}
-                                disabled={isCurrentActive}
-                                className={`p-1.5 rounded-lg transition ${
-                                  isCurrentActive
-                                    ? 'text-slate-300 cursor-not-allowed'
-                                    : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
-                                }`}
-                                title={isCurrentActive ? 'Tidak boleh memadam akaun aktif' : 'Padam Pegawai'}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {canManage && (
+                                <button
+                                  onClick={() => setDeletingUser(user)}
+                                  disabled={isCurrentActive}
+                                  className={`p-1.5 rounded-lg transition ${
+                                    isCurrentActive
+                                      ? 'text-slate-300 cursor-not-allowed'
+                                      : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                                  }`}
+                                  title={isCurrentActive ? 'Tidak boleh memadam akaun aktif' : 'Padam Pegawai'}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
 
                             </div>
                           </td>
@@ -771,79 +898,6 @@ export default function DirektoriSection({
         </div>
       )}
 
-      {/* SUB-TAB 2: Matriks Padanan Silang (⇄ 1PP AM 2.4) */}
-      {activeSubTab === 'crossMatrix' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-2xs space-y-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="p-1 rounded-lg bg-teal-100 text-teal-800">
-                  <ArrowLeftRight className="w-4 h-4" />
-                </span>
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Matriks Gandingan Pemeriksaan Silang (⇄) Sesi 2026
-                </h3>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Di bawah ketetapan 1PP AM 2.4 Bab C dan Pengurusan Integriti JKPAK POLIKU, setiap jabatan digandingkan secara timbal balik (⇄) untuk memeriksa makmal dan bengkel rakan silang. Pegawai Penjaga Ruang dihalang memeriksa ruang jagaan sendiri.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-              {pairedCards.map((pair, idx) => (
-                <div 
-                  key={idx}
-                  className="bg-slate-50 rounded-2xl p-4 border border-slate-200/90 space-y-3 hover:shadow-sm transition"
-                >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-                    <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider font-mono">
-                      Gandingan Silang #{idx + 1}
-                    </span>
-                    <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">
-                      Timbal Balik (⇄)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-200 text-center space-y-1">
-                      <span className="text-sm font-extrabold text-slate-900 font-mono block">
-                        {pair.a}
-                      </span>
-                      <span className="text-[10px] text-slate-500 line-clamp-1 block">
-                        {pair.nameA}
-                      </span>
-                      <span className="text-[10px] text-indigo-700 font-bold block pt-1">
-                        {users.filter(u => u.dept === pair.a).length} Pegawai
-                      </span>
-                    </div>
-
-                    <div className="w-8 h-8 rounded-full bg-slate-900 text-amber-400 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                      ⇄
-                    </div>
-
-                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-200 text-center space-y-1">
-                      <span className="text-sm font-extrabold text-slate-900 font-mono block">
-                        {pair.b}
-                      </span>
-                      <span className="text-[10px] text-slate-500 line-clamp-1 block">
-                        {pair.nameB}
-                      </span>
-                      <span className="text-[10px] text-indigo-700 font-bold block pt-1">
-                        {users.filter(u => u.dept === pair.b).length} Pegawai
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 leading-tight pt-1">
-                    Pegawai Pemeriksa dari <strong>{pair.a}</strong> akan dilantik mengesahkan aset di <strong>{pair.b}</strong> dan sebaliknya.
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* MODAL 1: CREATE OFFICER (Daftar Pegawai Baru) */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
@@ -855,10 +909,10 @@ export default function DirektoriSection({
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">
-                    Daftar Pegawai Baru ke Direktori
+                    Daftar Pegawai & Jana Kredensial
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Pilih satu daripada 6 Peranan Rasmi mengikut struktur organisasi
+                    Kata laluan sementara dijana automatik oleh Worker — dipaparkan sekali sahaja
                   </p>
                 </div>
               </div>
@@ -897,16 +951,18 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Emel Rasmi POLIKU *
+                      Emel Rasmi POLIKU (pilihan)
                     </label>
                     <input
                       type="email"
-                      required
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="nama@poliku.edu.my"
+                      placeholder="kosongkan untuk jana automatik"
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
                     />
+                    <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                      Jika kosong, nama pengguna dijana daripada nama penuh (cth: mohd.fadzli).
+                    </p>
                   </div>
 
                   <div>
@@ -918,7 +974,8 @@ export default function DirektoriSection({
                       onChange={(e) => setFormData({ ...formData, dept: e.target.value })}
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono font-medium"
                     >
-                      {DEPARTMENTS.map((d) => (
+                      <option value="">— Pilih Jabatan —</option>
+                      {departments.map((d) => (
                         <option key={d.id} value={d.id}>{d.id} - {d.name}</option>
                       ))}
                     </select>
@@ -928,56 +985,32 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Peranan Rasmi (6 Peranan Mandatori) *
+                      Peranan Rasmi *
                     </label>
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
                       className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
                     >
-                      {OFFICIAL_ROLES.map((r) => (
+                      {REGISTRATION_ROLES.map((r) => (
                         <option key={r} value={r}>{r}</option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                      Lantikan <strong>Pegawai Pemeriksa (PP)</strong> dibuat melalui menu Peranan &amp; Lantikan
+                      (tempoh 24 bulan), bukan semasa pendaftaran.
+                    </p>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Gred Jawatan
+                      No. Tel Bimbit
                     </label>
                     <input
-                      type="text"
-                      value={formData.grade}
-                      onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                      placeholder="Contoh: DH44 / N32 / FA29"
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      No. Telefon
-                    </label>
-                    <input
-                      type="text"
+                      type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="082-845500"
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Sambungan (Ext)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.ext}
-                      onChange={(e) => setFormData({ ...formData, ext: e.target.value })}
-                      placeholder="101"
+                      placeholder="cth. 012-3456789"
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
                     />
                   </div>
@@ -998,7 +1031,7 @@ export default function DirektoriSection({
                   </div>
                 </div>
 
-                {formData.role === 'Penyelia Lokasi' && (
+                {isRole(formData.role, 'PENYELIA_LOKASI') && (
                   <div>
                     <label className="block text-xs font-bold text-cyan-900 mb-1">
                       Nama Bilik / Makmal Dipertanggungjawabkan (Penjaga Ruang)
@@ -1016,7 +1049,7 @@ export default function DirektoriSection({
                   </div>
                 )}
 
-                {formData.role === 'Ketua Program' && (
+                {isRole(formData.role, 'KETUA_PROGRAM') && (
                   <div>
                     <label className="block text-xs font-bold text-blue-900 mb-1">
                       Program Akademik / Kursus Dipertanggungjawabkan
@@ -1032,20 +1065,78 @@ export default function DirektoriSection({
                 )}
               </div>
 
+              {issued && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-2.5">
+                  <div className="flex items-center gap-2 text-emerald-800">
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                    <p className="text-xs font-bold">
+                      Kredensial dijana — serahkan kepada pegawai (tidak boleh dilihat semula)
+                    </p>
+                  </div>
+                  {issuedFor && (
+                    <p className="text-[11px] font-semibold text-emerald-900">{issuedFor}</p>
+                  )}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 rounded-xl bg-white border border-emerald-200 px-3 py-2">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Nama Pengguna
+                        </p>
+                        <p className="font-mono text-xs font-bold text-slate-900">{issued.username}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(issued.username)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                        title="Salin nama pengguna"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 rounded-xl bg-white border border-emerald-200 px-3 py-2">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Kata Laluan Sementara
+                        </p>
+                        <p className="font-mono text-xs font-bold text-slate-900">
+                          {issued.temporaryPassword}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(issued.temporaryPassword)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                        title="Salin kata laluan"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-emerald-800">
+                    Pegawai <strong>wajib</strong> menukar kata laluan sementara ini semasa log masuk pertama (semua tindakan lain disekat sehingga ditukar).
+                  </p>
+                </div>
+              )}
+
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setIssued(null);
+                    setIssuedFor('');
+                  }}
                   className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition"
                 >
-                  Batal
+                  {issued ? 'Selesai' : 'Batal'}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4 text-amber-400" />
-                  <span>Daftar Pegawai</span>
+                  <span>{isSaving ? 'Menjana kredensial…' : 'Daftar & Jana Kredensial'}</span>
                 </button>
               </div>
             </form>
@@ -1124,7 +1215,8 @@ export default function DirektoriSection({
                       onChange={(e) => setFormData({ ...formData, dept: e.target.value })}
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono font-medium"
                     >
-                      {DEPARTMENTS.map((d) => (
+                      <option value="">— Pilih Jabatan —</option>
+                      {departments.map((d) => (
                         <option key={d.id} value={d.id}>{d.id} - {d.name}</option>
                       ))}
                     </select>
@@ -1134,54 +1226,37 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Peranan Rasmi (6 Peranan Mandatori) *
+                      Jawatan Hakiki *
                     </label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
-                      className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
-                    >
-                      {OFFICIAL_ROLES.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
+                    {editingUser && !ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole) ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2">
+                        <p className="text-xs font-bold text-slate-800">{editingUser.role}</p>
+                        <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                          Peranan sistem (lantikan) — urus melalui menu Peranan &amp; Lantikan.
+                        </p>
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
+                        className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
+                      >
+                        {REGISTRATION_ROLES.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Gred Jawatan
+                      No. Tel Bimbit
                     </label>
                     <input
-                      type="text"
-                      value={formData.grade}
-                      onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                      placeholder="Contoh: DH44 / N32"
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      No. Telefon
-                    </label>
-                    <input
-                      type="text"
+                      type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Sambungan (Ext)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.ext}
-                      onChange={(e) => setFormData({ ...formData, ext: e.target.value })}
+                      placeholder="cth. 012-3456789"
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono"
                     />
                   </div>
@@ -1202,7 +1277,7 @@ export default function DirektoriSection({
                   </div>
                 </div>
 
-                {formData.role === 'Penyelia Lokasi' && (
+                {isRole(formData.role, 'PENYELIA_LOKASI') && (
                   <div>
                     <label className="block text-xs font-bold text-cyan-900 mb-1">
                       Nama Bilik / Makmal Dipertanggungjawabkan (Penjaga Ruang)
@@ -1217,7 +1292,7 @@ export default function DirektoriSection({
                   </div>
                 )}
 
-                {formData.role === 'Ketua Program' && (
+                {isRole(formData.role, 'KETUA_PROGRAM') && (
                   <div>
                     <label className="block text-xs font-bold text-blue-900 mb-1">
                       Program Akademik / Kursus Dipertanggungjawabkan
@@ -1286,7 +1361,7 @@ export default function DirektoriSection({
                     {viewingUser.dept}
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-mono text-[10px] font-semibold border border-slate-200">
-                    Gred: {viewingUser.grade || 'DH41'}
+                    {viewingUser.phone || 'Tiada no. tel'}
                   </span>
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                     (viewingUser.status || 'Aktif') === 'Aktif' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -1299,11 +1374,60 @@ export default function DirektoriSection({
 
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3 text-xs">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-                <span className="text-slate-500">Peranan Rasmi:</span>
+                <span className="text-slate-500">Jawatan Utama:</span>
                 <span className="font-bold text-slate-900 font-mono">
                   {viewingUser.role}
                 </span>
               </div>
+
+              {(viewingUser.roles ?? []).length > 0 && (
+                <div className="pb-2 border-b border-slate-200/80 space-y-1.5">
+                  <span className="text-slate-500 block">Semua Peranan Aktif:</span>
+                  <div className="space-y-1">
+                    {(viewingUser.roles ?? []).map((r, index) => (
+                      <div
+                        key={`${r.roleId}-${r.scopeId ?? 'g'}-${index}`}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-white border border-slate-200 px-2 py-1"
+                      >
+                        <span className="font-semibold text-slate-800">{r.roleName}</span>
+                        <span className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
+                          <span
+                            className={`rounded px-1 py-0.2 font-bold ${
+                              r.kategori === 'LANTIKAN'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {r.kategori === 'LANTIKAN' ? 'LANTIKAN' : 'JAWATAN'}
+                          </span>
+                          <span className="text-slate-500">
+                            {r.scopeType === 'GLOBAL'
+                              ? 'GLOBAL'
+                              : `${r.scopeType} ${r.scopeId ?? ''}`}
+                          </span>
+                          <span className={r.validTo ? 'text-amber-700' : 'text-slate-400'}>
+                            {r.validTo ? `tamat ${r.validTo}` : 'kekal'}
+                          </span>
+                        </span>
+                        {canManage &&
+                          onSetPrimaryRole &&
+                          r.kategori === 'JAWATAN' &&
+                          r.roleId !== roleIdOf(viewingUser.role) && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimary(viewingUser, r.roleId)}
+                              disabled={isSaving}
+                              className="shrink-0 rounded-md border border-slate-300 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                              title="Jadikan jawatan utama"
+                            >
+                              Utama
+                            </button>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {viewingUser.roomAssigned && (
                 <div className="flex items-start justify-between pb-2 border-b border-slate-200/80 gap-2">
@@ -1323,14 +1447,9 @@ export default function DirektoriSection({
                 </div>
               )}
 
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-                <span className="text-slate-500">No. Telefon Rasmi:</span>
-                <span className="font-mono text-slate-800">{viewingUser.phone || '082-845500'}</span>
-              </div>
-
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">Sambungan (Ext):</span>
-                <span className="font-mono text-slate-800">{viewingUser.ext || '100'}</span>
+                <span className="text-slate-500">No. Tel Bimbit:</span>
+                <span className="font-mono text-slate-800">{viewingUser.phone || '—'}</span>
               </div>
             </div>
 
@@ -1341,32 +1460,110 @@ export default function DirektoriSection({
                 <span>Ketetapan PBAC & 1PP AM 2.4:</span>
               </div>
               <p className="text-[11px] leading-relaxed text-indigo-800">
-                {viewingUser.role === 'Penyelia Lokasi'
-                  ? 'Sebagai Pegawai Penjaga Ruang, pegawai ini dihalang daripada menuntut pemeriksaan ke atas bilik sendiri untuk memelihara integriti audit.'
-                  : viewingUser.role === 'Pegawai Pemeriksa'
-                  ? 'Pegawai bertauliah untuk menjalankan pemeriksaan fizikal 100% dan mengesahkan borang KEW.PA-11.'
-                  : viewingUser.role === 'Pentadbir Sistem'
-                  ? 'Mempunyai capaian penuh pengurusan sistem, pendaftaran takwim dan kawalan keselamatan dasar PBAC.'
-                  : 'Berkuasa memantau takwim, mengesahkan laporan JKPAK dan menandatangani kertas perakuan mesyuarat.'}
+                {(() => {
+                  const activeRoles = viewingUser.roles ?? [];
+                  const hasInspector = activeRoles.some((r) => r.roleId === 'PEMERIKSA');
+                  const supervisedRooms = activeRoles.filter(
+                    (r) => r.roleId === 'PENYELIA_LOKASI' && r.scopeType === 'LOCATION'
+                  ).length;
+                  const parts: string[] = [];
+
+                  if (hasInspector) {
+                    parts.push(
+                      'Dilantik Pegawai Pemeriksa — boleh menjalankan pemeriksaan fizikal 100% dan mengesahkan KEW.PA-11.'
+                    );
+                  }
+                  if (isRole(viewingUser.role, 'PENOLONG_PEGAWAI_ASET') || isRole(viewingUser.role, 'PEGAWAI_ASET')) {
+                    parts.push(
+                      'Pegawai aset jabatan — disekat daripada memeriksa aset jabatan sendiri (pemisahan tugas).'
+                    );
+                  }
+                  if (supervisedRooms > 0) {
+                    parts.push(
+                      `Penyelia ${supervisedRooms} ruang — disekat daripada memeriksa ruang tersebut.`
+                    );
+                  }
+                  if (isRole(viewingUser.role, 'KETUA_JABATAN') || isRole(viewingUser.role, 'KETUA_PROGRAM')) {
+                    parts.push('Berkuasa mengesahkan laporan dan kertas perakuan JKPAK.');
+                  }
+                  if (isRole(viewingUser.role, 'PENTADBIR_SISTEM')) {
+                    parts.push('Capaian penuh pentadbiran sistem dan kawalan dasar PBAC.');
+                  }
+                  if (!parts.length) {
+                    parts.push(
+                      'Tiada konflik kepentingan. Boleh dilantik sebagai pemeriksa melalui menu Peranan & Lantikan.'
+                    );
+                  }
+
+                  return parts.join(' ');
+                })()}
               </p>
             </div>
 
+            {issued && issuedFor.startsWith(viewingUser.name) && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5 space-y-2">
+                <p className="text-[11px] font-bold text-emerald-800">
+                  Kata laluan sementara baharu (tunjuk sekali sahaja)
+                </p>
+                <div className="flex items-center justify-between gap-2 rounded-xl bg-white border border-emerald-200 px-3 py-1.5">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Nama Pengguna
+                    </p>
+                    <p className="font-mono text-xs font-bold text-slate-900">{issued.username}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(issued.username)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                    title="Salin nama pengguna"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-xl bg-white border border-emerald-200 px-3 py-1.5">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Kata Laluan Sementara
+                    </p>
+                    <p className="font-mono text-xs font-bold text-slate-900">
+                      {issued.temporaryPassword}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(issued.temporaryPassword)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                    title="Salin kata laluan"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {formError && (
+              <p className="text-[11px] font-semibold text-rose-700">{formError}</p>
+            )}
+
             <div className="pt-2 flex items-center justify-between gap-3">
-              {onSwitchUser && (
+              {canManage && onResetCredentials && (
                 <button
-                  onClick={() => {
-                    onSwitchUser(viewingUser);
-                    setViewingUser(null);
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-xs"
+                  onClick={() => handleResetCredentials(viewingUser)}
+                  disabled={isSaving}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-xs disabled:opacity-60"
                 >
-                  <UserCheck className="w-4 h-4" />
-                  <span>Log Masuk Akaun Ini</span>
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>{isSaving ? 'Menjana…' : 'Jana Kata Laluan'}</span>
                 </button>
               )}
 
               <button
-                onClick={() => setViewingUser(null)}
+                onClick={() => {
+                  setViewingUser(null);
+                  setIssued(null);
+                  setIssuedFor('');
+                }}
                 className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition ml-auto"
               >
                 Tutup

@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useMemo } from 'react';
 import { 
   Building2, 
@@ -16,15 +14,23 @@ import {
   LayoutGrid,
   MapPin,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { DepartmentInfo, InspectionSchedule } from '@/lib/types';
+import { dataApi } from '@/lib/dataApi';
+import DepartmentModal from '@/components/modals/DepartmentModal';
 
 interface DirektoriJabatanSectionProps {
   departments: DepartmentInfo[];
   schedules: InspectionSchedule[];
   onSelectDepartmentForLocations: (deptId: string) => void;
   onOpenEjas: () => void;
+  canManage?: boolean;
+  onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 export default function DirektoriJabatanSection({
@@ -32,9 +38,15 @@ export default function DirektoriJabatanSection({
   schedules,
   onSelectDepartmentForLocations,
   onOpenEjas,
+  canManage = false,
+  onShowToast,
+  onRefresh,
 }: DirektoriJabatanSectionProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial?: DepartmentInfo } | null>(
+    null
+  );
 
   // Filtered departments
   const filteredDepartments = useMemo(() => {
@@ -76,6 +88,14 @@ export default function DirektoriJabatanSection({
     return departments.reduce((acc, d) => acc + (d.totalAset || 0), 0);
   }, [departments]);
 
+  const pairedCount = useMemo(
+    () => departments.filter((d) => !!d.crossPartnerId).length,
+    [departments]
+  );
+  const pairingPercent = departments.length
+    ? Math.round((pairedCount / departments.length) * 100)
+    : 0;
+
   // Export CSV
   const handleExportCSV = () => {
     let csv = 'Bil,Kod Jabatan,Nama Penuh Jabatan,Rakan Silang (1PP AM 2.4),Ketua Jabatan,Pegawai Penyelaras Aset,Penolong Pegawai Aset,Blok Bangunan,Jumlah Lokasi,Jumlah Anggaran Aset,Kemajuan Pemeriksaan\n';
@@ -93,6 +113,80 @@ export default function DirektoriJabatanSection({
     URL.revokeObjectURL(url);
   };
 
+  const handleSaveDepartment = async (payload: {
+    id?: string;
+    nama: string;
+    crossPartnerId?: string;
+    ketuaJabatan?: string;
+    penolongPegawaiAset?: string;
+  }) => {
+    if (modal?.mode === 'edit' && modal.initial) {
+      await dataApi.departments.update(modal.initial.id, {
+        nama: payload.nama,
+        crossPartnerId: payload.crossPartnerId ?? '',
+      });
+      onShowToast?.(`Profil jabatan ${modal.initial.id} dikemas kini.`, 'success');
+    } else {
+      await dataApi.departments.create({
+        id: payload.id ?? '',
+        nama: payload.nama,
+        crossPartnerId: payload.crossPartnerId,
+        ketuaJabatan: payload.ketuaJabatan,
+        penolongPegawaiAset: payload.penolongPegawaiAset,
+      });
+      onShowToast?.(`Jabatan ${payload.id} berjaya ditambah.`, 'success');
+    }
+    await onRefresh?.();
+  };
+
+  const handleDeleteDepartment = async (dept: DepartmentInfo) => {
+    // Semak rujukan dahulu supaya amaran menyatakan rekod sebenar yang menghalang.
+    let usage: Awaited<ReturnType<typeof dataApi.departments.usage>> | null = null;
+    try {
+      usage = await dataApi.departments.usage(dept.id);
+    } catch {
+      usage = null;
+    }
+
+    if (usage && !usage.canDelete) {
+      const rujukan = [
+        usage.pegawai > 0 ? `${usage.pegawai} pegawai` : null,
+        usage.lokasi > 0 ? `${usage.lokasi} lokasi ruang (${usage.aset} aset)` : null,
+        usage.jadual > 0 ? `${usage.jadual} jadual pemeriksaan` : null,
+        usage.statistikKitaran > 0 ? `${usage.statistikKitaran} statistik kitaran` : null,
+        usage.rekodAudit > 0 ? `${usage.rekodAudit} rekod audit` : null,
+      ].filter(Boolean);
+
+      window.alert(
+        `Jabatan ${dept.id} (${dept.name}) TIDAK boleh dipadam.\n\n` +
+          `Masih dirujuk oleh:\n• ${rujukan.join('\n• ')}\n\n` +
+          'Kesan jika dipadam secara paksa: pegawai kehilangan jabatan, lokasi ruang menjadi yatim ' +
+          '(aset KEW.PA-7 tidak lagi terikat pada jabatan), dan jadual pemeriksaan kehilangan unit ' +
+          'pemilik — sebahagiannya akan gagal (FK) dan sebahagian lagi menjadi data tergantung.\n\n' +
+          'Langkah selamat: pindahkan pegawai, lokasi dan jadual ke jabatan lain dahulu, ' +
+          'atau sekadar tukar nama jabatan melalui Edit (kod jabatan tidak berubah, jadi ' +
+          'pegawai/lokasi/jadual kekal terikat).'
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Padam jabatan ${dept.id} (${dept.name})?\n\nTiada pegawai, lokasi, aset atau jadual yang merujuk jabatan ini. Tindakan ini tidak boleh dibatalkan.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await dataApi.departments.remove(dept.id);
+      onShowToast?.(`Jabatan ${dept.id} dipadam.`, 'info');
+      await onRefresh?.();
+    } catch (error) {
+      onShowToast?.((error as Error).message, 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -104,7 +198,7 @@ export default function DirektoriJabatanSection({
             <span>Struktur Organisasi & Matriks Penyelaras Aset</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-            Direktori 12 Jabatan & Unit POLIKU
+            Direktori {departments.length} Jabatan &amp; Unit POLIKU
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-2xl leading-relaxed">
             Profil komprehensif bagi semua jabatan akademik dan pentadbiran di Politeknik Kuching Sarawak. Mengandungi maklumat Ketua Jabatan (KJ), Penyelaras Aset (KP), Penolong Pegawai Aset, serta pasangan timbal balik pemeriksaan silang (⇄) mengikut Tatacara Pengurusan Aset Alih Kerajaan (1PP AM 2.4).
@@ -147,6 +241,16 @@ export default function DirektoriJabatanSection({
             <Download className="w-4 h-4 text-amber-400" />
             <span>Muat Turun CSV</span>
           </button>
+
+          {canManage && (
+            <button
+              onClick={() => setModal({ mode: 'create' })}
+              className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-2 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Jabatan</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -155,8 +259,8 @@ export default function DirektoriJabatanSection({
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Entiti Jabatan</span>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">12</span>
-            <span className="text-xs text-slate-500">jabatan & unit</span>
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{departments.length}</span>
+            <span className="text-xs text-slate-500">jabatan &amp; unit</span>
           </div>
           <span className="text-[10px] text-slate-400 mt-1 block">Akademik & Sokongan</span>
         </div>
@@ -164,8 +268,10 @@ export default function DirektoriJabatanSection({
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
           <span className="text-[11px] font-bold text-sky-700 uppercase tracking-wider block">Gandingan Silang</span>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-2xl font-extrabold text-sky-700 font-mono">100%</span>
-            <span className="text-xs text-sky-600">6 gandingan</span>
+            <span className="text-2xl font-extrabold text-sky-700 font-mono">{pairingPercent}%</span>
+            <span className="text-xs text-sky-600">
+              {pairedCount} daripada {departments.length} berganding
+            </span>
           </div>
           <span className="text-[10px] text-sky-600 mt-1 block">Pematuhan 1PP AM 2.4</span>
         </div>
@@ -230,6 +336,11 @@ export default function DirektoriJabatanSection({
                         <span className="font-mono text-[11px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
                           {dept.id}
                         </span>
+                        {dept.isOperational === 0 && (
+                          <span className="ml-1.5 rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-slate-700">
+                            Bukan Operasi
+                          </span>
+                        )}
                         <h3 className="font-bold text-slate-900 text-sm mt-1 leading-snug line-clamp-1">
                           {dept.name}
                         </h3>
@@ -266,7 +377,7 @@ export default function DirektoriJabatanSection({
                     </span>
                     <div className="font-medium text-slate-700 flex items-center gap-1.5 mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                      <span>{dept.penyelaras || dept.penolongPegawaiAset || 'Pegawai Penyelaras Aset'}</span>
+                      <span>{dept.penyelaras || dept.penolongPegawaiAset || 'Belum dilantik'}</span>
                     </div>
                   </div>
 
@@ -291,7 +402,7 @@ export default function DirektoriJabatanSection({
                   {/* Inspection Progress Bar */}
                   <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-slate-600">Kemajuan Pemeriksaan 100%:</span>
+                      <span className="font-semibold text-slate-600">Kemajuan Pemeriksaan:</span>
                       <span className="font-mono font-bold text-slate-900">{stats.percent}% Selesai</span>
                     </div>
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -315,7 +426,7 @@ export default function DirektoriJabatanSection({
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-3.5 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2">
+                <div className={`p-3.5 bg-slate-50 border-t border-slate-100 grid gap-2 ${canManage ? 'grid-cols-2' : 'grid-cols-2'}`}>
                   <button
                     onClick={() => onSelectDepartmentForLocations(dept.id)}
                     className="py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 text-xs font-semibold transition flex items-center justify-center gap-1.5"
@@ -324,14 +435,47 @@ export default function DirektoriJabatanSection({
                     <span>Lihat Lokasi</span>
                   </button>
 
-                  <button
-                    onClick={onOpenEjas}
-                    className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
-                  >
-                    <span>Jadual AM 2.4</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-                  </button>
+                  {canManage ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setModal({ mode: 'edit', initial: dept })}
+                        className="py-2 px-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 text-xs font-semibold transition flex items-center justify-center gap-1"
+                        title="Kemas kini profil jabatan"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDepartment(dept)}
+                        className="py-2 px-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold transition flex items-center justify-center gap-1"
+                        title="Padam jabatan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Padam</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={onOpenEjas}
+                      className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <span>Jadual AM 2.4</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                    </button>
+                  )}
                 </div>
+
+                {canManage && (
+                  <div className="px-3.5 pb-3">
+                    <button
+                      onClick={onOpenEjas}
+                      className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <span>Jadual AM 2.4</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                    </button>
+                  </div>
+                )}
 
               </div>
             );
@@ -395,7 +539,7 @@ export default function DirektoriJabatanSection({
 
                       <td className="py-3.5 px-4">
                         <div className="text-slate-700 text-xs">
-                          {dept.penyelaras || dept.penolongPegawaiAset || 'Penyelaras Aset'}
+                          {dept.penyelaras || dept.penolongPegawaiAset || 'Belum dilantik'}
                         </div>
                       </td>
 
@@ -428,13 +572,33 @@ export default function DirektoriJabatanSection({
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <button
-                          onClick={() => onSelectDepartmentForLocations(dept.id)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs transition inline-flex items-center gap-1"
-                        >
-                          <Layers className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Lokasi ({dept.totalLokasi || 0})</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => onSelectDepartmentForLocations(dept.id)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs transition inline-flex items-center gap-1"
+                          >
+                            <Layers className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Lokasi ({dept.totalLokasi || 0})</span>
+                          </button>
+                          {canManage && (
+                            <>
+                              <button
+                                onClick={() => setModal({ mode: 'edit', initial: dept })}
+                                className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
+                                title="Kemas kini profil jabatan"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDepartment(dept)}
+                                className="rounded-lg border border-rose-200 bg-white p-1.5 text-rose-600 hover:bg-rose-50"
+                                title="Padam jabatan"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -443,6 +607,17 @@ export default function DirektoriJabatanSection({
             </table>
           </div>
         </div>
+      )}
+
+      {modal && (
+        <DepartmentModal
+          mode={modal.mode}
+          initial={modal.initial ?? null}
+          departments={departments}
+          onClose={() => setModal(null)}
+          onSubmit={handleSaveDepartment}
+          onShowToast={onShowToast ?? (() => undefined)}
+        />
       )}
 
     </div>

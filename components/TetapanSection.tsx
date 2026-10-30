@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { 
   SlidersHorizontal, 
@@ -18,31 +16,36 @@ import {
   FileText,
   Clock
 } from 'lucide-react';
-import { SystemSettings, UserSession } from '@/lib/types';
-import { DEFAULT_SETTINGS } from '@/lib/initialData';
+import { SystemSettings, UserSession, RoleAssignment } from '@/lib/types';
+import { deriveManageScope } from '@/lib/manageScope';
+import AnnualCalendarEditor from '@/components/AnnualCalendarEditor';
 
 interface TetapanSectionProps {
   settings: SystemSettings;
   onSaveSettings: (newSettings: SystemSettings) => void;
-  onResetDefaultData: () => void;
+  onReloadData: () => void;
   onExportFullBackupJSON: () => void;
   onImportBackupJSON: (file: File) => void;
   currentUser: UserSession | null;
+  myAssignments?: RoleAssignment[];
 }
 
 export default function TetapanSection({
   settings,
   onSaveSettings,
-  onResetDefaultData,
+  onReloadData,
   onExportFullBackupJSON,
   onImportBackupJSON,
   currentUser,
+  myAssignments = [],
 }: TetapanSectionProps) {
   const [formData, setFormData] = useState<SystemSettings>({ ...settings });
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const isAdmin = currentUser?.role.includes('Pentadbir') || currentUser?.role.includes('Ketua Jabatan');
+  // Takwim dikawal selia oleh lantikan PENTADBIR_SISTEM (selaras `requireRole` pada Worker).
+  const isAdmin =
+    deriveManageScope(myAssignments).isAdmin || Boolean(currentUser?.role?.includes('Pentadbir'));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,20 +153,12 @@ export default function TetapanSection({
             </div>
           </div>
 
-          <div className="pt-2">
-            <label className="block font-semibold text-slate-700 text-xs mb-1">
-              Tarikh Sasaran Mesyuarat Pra-JKPAK Bil. 1/{formData.sesiTahun}
-            </label>
-            <input
-              type="date"
-              value={formData.tarikhPraJkpak}
-              onChange={(e) => setFormData({ ...formData, tarikhPraJkpak: e.target.value })}
-              className="w-full sm:w-1/2 px-3 py-2 text-xs border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none font-mono"
-            />
-            <span className="text-[11px] text-slate-400 mt-1 block">
-              Semua dapatan pemeriksaan makmal dan bengkel perlu dimuktamadkan sebelum tarikh ini.
-            </span>
-          </div>
+          <AnnualCalendarEditor
+            tahun={formData.sesiTahun}
+            isAdmin={Boolean(isAdmin)}
+            currentRole={currentUser?.role}
+            defaultPraJkpak={formData.tarikhPraJkpak}
+          />
         </div>
 
         {/* Section 2: Pematuhan 1PP AM 2.4 & Polisi Keselamatan PBAC */}
@@ -435,10 +430,10 @@ export default function TetapanSection({
             <div>
               <div className="flex items-center gap-2 font-bold text-rose-900 mb-1">
                 <RotateCcw className="w-4 h-4 text-rose-600" />
-                <span>Set Semula Data Piawai</span>
+                <span>Muat Semula Data D1</span>
               </div>
               <p className="text-[11px] text-rose-700">
-                Kembalikan semua data jadual pemeriksaan, lokasi, dan pengguna kepada data contoh rasmi Politeknik Kuching Sarawak.
+                Muat semula semua rekod jadual pemeriksaan, lokasi dan direktori pegawai terus daripada pangkalan data Cloudflare D1.
               </p>
             </div>
             <button
@@ -446,7 +441,7 @@ export default function TetapanSection({
               className="mt-4 w-full py-2 px-3 rounded-lg bg-rose-700 hover:bg-rose-800 text-white font-semibold text-xs transition flex items-center justify-center gap-2"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Set Semula Data</span>
+              <span>Muat Semula Data</span>
             </button>
           </div>
 
@@ -464,10 +459,10 @@ export default function TetapanSection({
 
             <div className="text-center space-y-1">
               <h3 className="font-bold text-slate-900 text-base">
-                Sahkan Set Semula Pangkalan Data?
+                Sahkan Muat Semula Data?
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Tindakan ini akan mengembalikan pangkalan data kepada konfigurasi asal Politeknik Kuching Sarawak (Sesi 2026). Semua rekod baharu yang belum dieksport akan dipadam.
+                Tindakan ini akan memuat semula semua rekod terkini daripada Cloudflare D1. Perubahan yang belum disimpan akan hilang.
               </p>
             </div>
 
@@ -480,12 +475,12 @@ export default function TetapanSection({
               </button>
               <button
                 onClick={() => {
-                  onResetDefaultData();
+                  onReloadData();
                   setShowResetConfirm(false);
                 }}
                 className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs"
               >
-                Ya, Set Semula Data Sekarang
+                Ya, Muat Semula Sekarang
               </button>
             </div>
           </div>

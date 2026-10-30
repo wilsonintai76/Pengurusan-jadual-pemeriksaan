@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { 
   FileSignature, 
@@ -31,7 +29,7 @@ export default function PraJkpakSection({
     (s) => s.status === 'Selesai' && s.laporanPraJkpak
   );
 
-  let totLokasi = selesaiData.length;
+  const totLokasi = selesaiData.length;
   let totBaik = 0;
   let totRosak = 0;
   let totUsang = 0;
@@ -227,7 +225,7 @@ export default function PraJkpakSection({
               Belum ada laporan KEW.PA-11 yang disahkan selesai.
             </p>
             <p className="text-[11px] text-slate-400 max-w-md mx-auto">
-              Pegawai Pemeriksa perlu mengemukakan perakuan pemeriksaan di menu e-JAS terlebih dahulu.
+              Pegawai Pemeriksa perlu mengemukakan perakuan pemeriksaan di menu Inspect-Able terlebih dahulu.
             </p>
           </div>
         ) : (

@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useMemo } from 'react';
 import { 
   MapPin, 
@@ -22,50 +20,81 @@ import {
   UserCheck,
   Sparkles,
   FileText,
-  Users,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Table as TableIcon,
+  Map as MapIcon,
+  Compass
 } from 'lucide-react';
-import { LocationInfo, InspectionStatus, UserSession } from '@/lib/types';
-import { DEPARTMENTS } from '@/lib/initialData';
+import { LocationInfo, PegawaiBertanggungjawab, RoleAssignment, UserSession } from '@/lib/types';
+import { useDepartments, useOfficers } from '@/lib/useReferenceData';
+import { deriveManageScope, canManageLocation } from '@/lib/manageScope';
+import { deriveKategoriRuang, parseKodLokasi } from '@/lib/kodLokasi';
+import { assetCsvFileName, buildAssetCsv, downloadCsv } from '@/lib/assetCsv';
+import { dataApi } from '@/lib/dataApi';
+import type { AssetPayload } from '@/lib/dataApi';
+import { KEWPA7_EXTRACT_URL } from '@/lib/apiConfig';
+import { authHeaders } from '@/lib/authClient';
 import GpsMapPicker from './GpsMapPicker';
+import DirektoriLokasiMapView from './DirektoriLokasiMapView';
 
 interface DirektoriLokasiSectionProps {
   locations: LocationInfo[];
   currentUser: UserSession | null;
-  onAddLocation: (newLocation: LocationInfo) => void;
-  onUpdateLocation: (updatedLocation: LocationInfo) => void;
+  myAssignments?: RoleAssignment[];
+  onAddLocation: (newLocation: LocationInfo, assets?: AssetPayload[]) => void;
+  onUpdateLocation: (updatedLocation: LocationInfo, assets?: AssetPayload[]) => void;
   onDeleteLocation: (id: string) => void;
   onNavigateToSchedule?: (jadualId?: string) => void;
   onOpenKewpa7Modal?: () => void;
+  onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   initialDeptFilter?: string;
 }
 
 export default function DirektoriLokasiSection({
   locations,
   currentUser,
+  myAssignments = [],
   onAddLocation,
   onUpdateLocation,
   onDeleteLocation,
   onNavigateToSchedule,
   onOpenKewpa7Modal,
+  onShowToast,
   initialDeptFilter = '',
 }: DirektoriLokasiSectionProps) {
+  const departments = useDepartments();
+  const officers = useOfficers();
+  const manageScope = useMemo(() => deriveManageScope(myAssignments), [myAssignments]);
+  // Skop jabatan (bukan semestinya jabatan sendiri) membenarkan pendaftaran ruang baharu;
+  // jabatan sasaran tetap disemak oleh Worker.
+  const canRegisterLocation = manageScope.isAdmin || manageScope.departmentIds.length > 0;
+  const canEditLocation = (loc: LocationInfo) => canManageLocation(manageScope, loc);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState(initialDeptFilter);
   const [selectedKategori, setSelectedKategori] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [highlightMapLocationId, setHighlightMapLocationId] = useState<string | undefined>(undefined);
 
   // Modal states
   const [showAddEditModal, setShowAddEditModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState<LocationInfo | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
   const [previewGpsLocation, setPreviewGpsLocation] = useState<LocationInfo | null>(null);
 
   // KEW.PA-7 Extraction state inside modal
   const [isExtractingKewpa7, setIsExtractingKewpa7] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
   const [extractSuccessMsg, setExtractSuccessMsg] = useState<string | null>(null);
+  const [extractDiagnostic, setExtractDiagnostic] = useState<{
+    missing: string[];
+    preview: string;
+  } | null>(null);
+  const [extractedAssets, setExtractedAssets] = useState<
+    Array<{ noSiriPendaftaran: string; keteranganAset: string; statusFizikal: string }>
+  >([]);
   const [dragActive, setDragActive] = useState(false);
 
   // Form State
@@ -73,15 +102,9 @@ export default function DirektoriLokasiSection({
     kodRuang: '',
     nama: '',
     jabatan: 'JTMK',
-    kategoriRuang: 'Makmal Komputer',
-    bangunan: 'Blok E (ICT)',
-    aras: 'Aras 2',
-    penjaga: '',
-    penjagaJawatan: '',
-    penjagaEmel: '',
-    penjagaTel: '',
-    anggaranAset: 30,
-    statusPemeriksaan: 'Belum Mula',
+    bangunan: '',
+    aras: '',
+    pegawaiBertanggungjawabList: [],
   });
 
   const handleProcessKewpa7File = async (file: File) => {
@@ -97,13 +120,18 @@ export default function DirektoriLokasiSection({
       const body = new FormData();
       body.append('file', file);
 
-      const res = await fetch('/api/kewpa7/extract', {
+      const res = await fetch(KEWPA7_EXTRACT_URL, {
         method: 'POST',
+        headers: { ...authHeaders() },
         body,
       });
 
       clearInterval(interval);
       setExtractProgress(100);
+
+      if (res.status === 401) {
+        throw new Error('Sesi tamat. Sila log masuk semula sebelum memuat naik KEW.PA-7.');
+      }
 
       if (!res.ok) {
         throw new Error(`Ralat pelayan (${res.status})`);
@@ -123,24 +151,65 @@ export default function DirektoriLokasiSection({
                          d.bahagian?.includes('ICT') || d.bahagian?.includes('MAKLUMAT') ? 'JTMK' : 
                          d.bahagian?.includes('PERDAGANGAN') ? 'JP' : 
                          d.bahagian?.includes('SAINS') || d.bahagian?.includes('MATEMATIK') ? 'JMSK' : 
-                         currentUser?.dept || 'JKM';
+                         currentUser?.dept || '';
 
-        const officerList = d.pegawaiBertanggungjawabList || [];
-        const officerNames = officerList.map((o: any) => o.nama).join(', ') || 'Wilson Bin Intai';
+        const segments = parseKodLokasi(d.kodLokasi || '');
+        const extractedOfficers: PegawaiBertanggungjawab[] = Array.isArray(d.pegawaiBertanggungjawabList)
+          ? d.pegawaiBertanggungjawabList
+          : [];
+        const matchedOfficers = extractedOfficers
+          .map((extracted) =>
+            officers.find(
+              (dir) => dir.name.trim().toLowerCase() === String(extracted.nama ?? '').trim().toLowerCase()
+            )
+          )
+          .filter((officer): officer is UserSession => Boolean(officer));
 
         setFormData((prev) => ({
           ...prev,
-          nama: d.lokasi || 'BENGKEL HI-TECH',
-          kodRuang: d.kodLokasi ? d.kodLokasi.split('/')[0]?.trim() || '130101' : '130101',
+          nama: d.lokasi || '',
+          kodRuang: d.kodLokasi || segments.kodRuang,
+          bangunan: segments.bangunan || prev.bangunan || '',
+          aras: segments.aras || prev.aras || '',
           jabatan: mappedDept,
-          kategoriRuang: d.lokasi?.toUpperCase().includes('BENGKEL') ? 'Bengkel Teknikal' : 'Makmal Komputer',
-          penjaga: officerNames,
-          penjagaJawatan: officerList[0]?.jawatan || 'PPPT / Penolong Pegawai Aset',
-          anggaranAset: d.senaraiAset ? d.senaraiAset.length : 22,
-          pegawaiBertanggungjawabList: officerList,
+          kategoriRuang: deriveKategoriRuang(d.lokasi || '') as LocationInfo['kategoriRuang'],
+          pegawaiBertanggungjawabList: matchedOfficers.map((officer) => ({
+            id: officer.id || officer.email,
+            nama: officer.name,
+            jawatan: officer.role,
+            emel: officer.email,
+            tel: officer.phone,
+          })),
+          penjaga: matchedOfficers[0]?.name || '',
+          penjagaJawatan: matchedOfficers[0]?.role || '',
+          penjagaEmel: matchedOfficers[0]?.email || '',
+          penjagaTel: matchedOfficers[0]?.phone || '',
         }));
 
-        setExtractSuccessMsg(`Data borang KEW.PA-7 bagi "${d.lokasi || 'BENGKEL HI-TECH'}" berjaya diekstrak secara automatik ke dalam ruangan input!`);
+        setExtractSuccessMsg(
+          `Data borang KEW.PA-7 bagi "${d.lokasi || 'lokasi ini'}" berjaya diekstrak${
+            matchedOfficers.length
+              ? '!'
+              : '. Pegawai Bertanggungjawab perlu dipilih daripada Direktori Pegawai.'
+          }`
+        );
+
+        setExtractDiagnostic(
+          Array.isArray(json.missingFields) && json.missingFields.length && json.textPreview
+            ? { missing: json.missingFields, preview: json.textPreview }
+            : null
+        );
+
+        // Aset diekstrak disimpan bersama lokasi supaya muat naik semula menimpa senarai lama.
+        setExtractedAssets(
+          (Array.isArray(d.senaraiAset) ? d.senaraiAset : []).map(
+            (asset: { noSiriPendaftaran?: string; keteranganAset?: string; statusFizikal?: string }) => ({
+              noSiriPendaftaran: String(asset.noSiriPendaftaran ?? ''),
+              keteranganAset: String(asset.keteranganAset ?? ''),
+              statusFizikal: String(asset.statusFizikal ?? 'Baik'),
+            })
+          )
+        );
       } else {
         alert('Ralat semasa mengekstrak borang KEW.PA-7.');
       }
@@ -164,65 +233,144 @@ export default function DirektoriLokasiSection({
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  const getDeptDefaultCoords = (dept: string) => {
+    switch (dept) {
+      case 'JTMK': return { lat: 1.621810, lng: 110.324100 };
+      case 'JKM': return { lat: 1.621425, lng: 110.323580 };
+      case 'JKE': return { lat: 1.621050, lng: 110.322900 };
+      case 'JKA': return { lat: 1.620800, lng: 110.324500 };
+      case 'JP': return { lat: 1.622100, lng: 110.323800 };
+      case 'JMSK': return { lat: 1.621650, lng: 110.322300 };
+      case 'PENTADBIRAN': return { lat: 1.622500, lng: 110.323000 };
+      case 'PSA': return { lat: 1.622350, lng: 110.324400 };
+      case 'CISEC': return { lat: 1.622700, lng: 110.323900 };
+      case 'ULPL': return { lat: 1.622600, lng: 110.322600 };
+      case 'HAL EHWAL PELAJAR': return { lat: 1.621200, lng: 110.324800 };
+      default: return { lat: 1.621425, lng: 110.323580 };
+    }
+  };
+
   const handleOpenAdd = () => {
+    if (!canRegisterLocation) {
+      onShowToast?.(
+        'Akses ditolak: hanya pentadbir sistem atau pegawai dengan skop jabatan/unit boleh mendaftar lokasi baharu.',
+        'error'
+      );
+      return;
+    }
     setEditingLocation(null);
+    const defaultCoords = getDeptDefaultCoords(currentUser?.dept || 'JTMK');
     setFormData({
-      kodRuang: `MAK-${currentUser?.dept || 'JTMK'}-${(locations.length + 1).toString().padStart(2, '0')}`,
+      kodRuang: '',
       nama: '',
       jabatan: currentUser?.dept || 'JTMK',
-      kategoriRuang: 'Makmal Komputer',
-      bangunan: 'Blok E (ICT)',
-      aras: 'Aras 2',
-      penjaga: currentUser?.name || '',
-      penjagaJawatan: currentUser?.grade || 'Penolong Pegawai',
-      penjagaEmel: currentUser?.email || '',
-      penjagaTel: '082-845510',
-      anggaranAset: 25,
-      statusPemeriksaan: 'Belum Mula',
+      bangunan: '',
+      aras: '',
+      pegawaiBertanggungjawabList: [],
+      latitude: defaultCoords.lat,
+      longitude: defaultCoords.lng,
     });
     setShowAddEditModal(true);
   };
 
   const handleOpenEdit = (loc: LocationInfo) => {
+    if (!canEditLocation(loc)) {
+      onShowToast?.(
+        `Akses ditolak: anda bukan Penyelia Lokasi bagi ${loc.nama} dan tiada skop jabatan ${loc.jabatan}.`,
+        'error'
+      );
+      return;
+    }
     setEditingLocation(loc);
     setFormData({ ...loc });
     setShowAddEditModal(true);
   };
 
+  const handleViewOnMap = (loc: LocationInfo) => {
+    setHighlightMapLocationId(loc.id);
+    setViewMode('map');
+  };
+
+  /**
+   * KEW.PA-7 pada jadual lokasi = muat turun CSV senarai aset (no. siri pendaftaran).
+   * Pemeriksa menggunakan fail ini untuk Daftar Pemeriksaan dalam Sistem Pengurusan Aset Alih.
+   */
+  const handleDownloadKewpa7Csv = async (loc: LocationInfo) => {
+    if (downloadingCsvId) return;
+    setDownloadingCsvId(loc.id);
+
+    try {
+      const { data } = await dataApi.locations.assets(loc.id);
+
+      if (!data.length) {
+        onShowToast?.(
+          `Tiada aset berdaftar bagi ${loc.nama}. Muat naik KEW.PA-7 dahulu untuk mengisi senarai aset.`,
+          'info'
+        );
+        return;
+      }
+
+      const csv = buildAssetCsv(
+        data.map((asset, index) => ({
+          bil: index + 1,
+          noSiriPendaftaran: asset.noSiriPendaftaran,
+          keterangan: asset.keterangan,
+        }))
+      );
+
+      downloadCsv(assetCsvFileName(loc.nama, loc.kodRuang), csv);
+      onShowToast?.(`CSV KEW.PA-7 bagi ${loc.nama} dimuat turun (${data.length} aset).`, 'success');
+    } catch (error) {
+      onShowToast?.(`Gagal memuat turun CSV: ${(error as Error).message}`, 'error');
+    } finally {
+      setDownloadingCsvId(null);
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.kodRuang || !formData.nama || !formData.penjaga) {
-      alert('Sila lengkapkan Kod Ruang, Nama Lokasi, dan Pegawai Penjaga Ruang.');
+    if (!formData.kodRuang || !formData.nama || !formData.bangunan || !formData.aras) {
+      alert('Sila lengkapkan Kod Ruang, Nama Lokasi, Bangunan/Blok dan Aras/Tingkat.');
       return;
     }
+
+    const custodian = formData.pegawaiBertanggungjawabList?.[0];
+    // Pegawai penjaga sentiasa diterbitkan daripada Direktori Pegawai, bukan teks bebas.
+    const officerFields = {
+      penjaga: custodian?.nama || '',
+      penjagaJawatan: custodian?.jawatan || '',
+      penjagaEmel: custodian?.emel || '',
+      penjagaTel: custodian?.tel || '',
+      pegawaiBertanggungjawabList: custodian ? [custodian] : [],
+    };
 
     if (editingLocation) {
       const updated: LocationInfo = {
         ...editingLocation,
         ...(formData as LocationInfo),
+        ...officerFields,
+        kategoriRuang: deriveKategoriRuang(formData.nama) as LocationInfo['kategoriRuang'],
         latitude: formData.latitude || editingLocation.latitude || 1.621425,
         longitude: formData.longitude || editingLocation.longitude || 110.323580,
       };
-      onUpdateLocation(updated);
+      onUpdateLocation(updated, extractedAssets);
     } else {
       const newLoc: LocationInfo = {
         id: `LOK-${(locations.length + 1).toString().padStart(3, '0')}`,
-        kodRuang: formData.kodRuang!,
-        nama: formData.nama!,
+        kodRuang: formData.kodRuang,
+        nama: formData.nama,
         jabatan: formData.jabatan || 'JTMK',
-        kategoriRuang: (formData.kategoriRuang as any) || 'Makmal Komputer',
-        bangunan: formData.bangunan || 'Blok Utama',
-        aras: formData.aras || 'Aras 1',
-        penjaga: formData.penjaga!,
-        penjagaJawatan: formData.penjagaJawatan || '',
-        penjagaEmel: formData.penjagaEmel || '',
-        penjagaTel: formData.penjagaTel || '',
-        anggaranAset: Number(formData.anggaranAset) || 0,
-        statusPemeriksaan: (formData.statusPemeriksaan as InspectionStatus) || 'Belum Mula',
+        kategoriRuang: deriveKategoriRuang(formData.nama) as LocationInfo['kategoriRuang'],
+        bangunan: formData.bangunan,
+        aras: formData.aras,
+        ...officerFields,
+        // Bilangan aset diambil daripada KEW.PA-7 (jadual assets), bukan daripada borang ini.
+        anggaranAset: 0,
+        statusPemeriksaan: 'Belum Mula',
         latitude: formData.latitude || 1.621425,
         longitude: formData.longitude || 110.323580,
       };
-      onAddLocation(newLoc);
+      onAddLocation(newLoc, extractedAssets);
     }
 
     setShowAddEditModal(false);
@@ -292,23 +440,62 @@ export default function DirektoriLokasiSection({
           </p>
         </div>
 
-        {/* Action Buttons at the Bottom for Optimal Compact Layout */}
-        <div className="pt-1 flex flex-wrap items-center gap-3">
-          <button
-            onClick={onOpenKewpa7Modal || handleOpenAdd}
-            className="px-4.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center gap-2 shadow-xs border border-amber-300 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-            <span>Daftar Lokasi Baru (KEW.PA-7 / AI)</span>
-          </button>
+        {/* Action Buttons & View Mode Toggle */}
+        <div className="pt-1 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={onOpenKewpa7Modal || handleOpenAdd}
+              disabled={!canRegisterLocation}
+              title={
+                canRegisterLocation
+                  ? 'Daftar lokasi baharu daripada KEW.PA-7'
+                  : 'Hanya pentadbir sistem atau pegawai dengan skop jabatan/unit boleh mendaftar lokasi baharu'
+              }
+              className="px-4.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center gap-2 shadow-xs border border-amber-300 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-400"
+            >
+              <Plus className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+              <span>Daftar Lokasi Baru (KEW.PA-7 / AI)</span>
+            </button>
 
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 font-semibold text-xs transition flex items-center gap-2 cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-amber-400" />
-            <span>Muat Turun CSV</span>
-          </button>
+            <button
+              onClick={handleExportCSV}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 font-semibold text-xs transition flex items-center gap-2 cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-amber-400" />
+              <span>Muat Turun CSV</span>
+            </button>
+          </div>
+
+          {/* Toggle between List View and Map View */}
+          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-700/80 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-amber-400 text-slate-950 shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <TableIcon className="w-4 h-4" />
+              <span>Paparan Senarai</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-amber-400 text-slate-950 shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <MapIcon className="w-4 h-4" />
+              <span>Paparan Peta Visual</span>
+              <span className="text-[9px] px-1.5 py-0.2 bg-teal-600 text-white rounded font-mono font-extrabold uppercase">
+                OSM
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -394,8 +581,8 @@ export default function DirektoriLokasiSection({
               onChange={(e) => setSelectedDept(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-amber-400 focus:outline-none font-medium"
             >
-              <option value="">Semua Jabatan ({DEPARTMENTS.length})</option>
-              {DEPARTMENTS.map((dept) => (
+              <option value="">Semua Jabatan ({departments.length})</option>
+              {departments.map((dept) => (
                 <option key={dept.id} value={dept.id}>
                   {dept.id} - {dept.name}
                 </option>
@@ -484,245 +671,296 @@ export default function DirektoriLokasiSection({
         )}
       </div>
 
-      {/* Main Table: Desktop UI Priority, SQUARE CORNERS (rounded-none border border-slate-200) */}
-      <div className="w-full bg-white rounded-none border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-900 text-white font-mono uppercase tracking-wider text-[11px]">
-                <th className="py-3 px-3 w-12 text-center border-b border-slate-800">#</th>
-                <th className="py-3 px-3 min-w-[130px] border-b border-slate-800">Kod Ruang</th>
-                <th className="py-3 px-4 min-w-[240px] border-b border-slate-800">Nama Lokasi & Bangunan</th>
-                <th className="py-3 px-3 min-w-[100px] border-b border-slate-800">Jabatan</th>
-                <th className="py-3 px-3 min-w-[140px] border-b border-slate-800">Kategori Ruang</th>
-                <th className="py-3 px-4 min-w-[220px] border-b border-slate-800">Pegawai Penjaga Ruang</th>
-                <th className="py-3 px-3 min-w-[100px] text-center border-b border-slate-800">Bil. Aset</th>
-                <th className="py-3 px-3 min-w-[150px] border-b border-slate-800">Status Pemeriksaan</th>
-                <th className="py-3 px-4 min-w-[150px] text-center border-b border-slate-800">Tindakan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 bg-white">
-              {filteredLocations.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
-                    <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                    <p className="font-semibold text-slate-600 text-sm">Tiada lokasi dijumpai.</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Sila semak semula kata kunci atau ubah penapis di atas.</p>
-                  </td>
+      {/* View Mode Switcher Sub-bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <span className="text-xs font-bold text-slate-700">Pilihan Paparan:</span>
+          <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5 text-slate-600" />
+              <span>Senarai Jadual ({filteredLocations.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5 text-amber-800" />
+              <span>Peta Visual Interaktif</span>
+              <span className="text-[10px] bg-slate-900 text-amber-300 font-mono px-1.5 py-0.2 rounded font-bold">
+                {filteredLocations.length} Pin
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
+          {viewMode === 'map' ? (
+            <span className="flex items-center gap-1.5 text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Peta OpenStreetMap Aktif &bull; Klik pin atau gunakan &apos;Papar Lokasi Saya&apos;</span>
+            </span>
+          ) : (
+            <span className="text-slate-400">
+              Pematuhan 1PP AM 2.4 Para 24 (Senarai Inventori Fizikal)
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Conditional: Interactive Map View vs Table List View */}
+      {viewMode === 'map' ? (
+        <DirektoriLokasiMapView
+          locations={filteredLocations}
+          onEditLocation={handleOpenEdit}
+          onNavigateToSchedule={onNavigateToSchedule}
+          highlightLocationId={highlightMapLocationId}
+        />
+      ) : (
+        /* Main Table: Desktop UI Priority, SQUARE CORNERS */
+        <div className="w-full bg-white rounded-none border border-slate-200 shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-900 text-white font-mono uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-3 w-12 text-center border-b border-slate-800">#</th>
+                  <th className="py-3 px-3 min-w-[130px] border-b border-slate-800">Kod Lokasi</th>
+                  <th className="py-3 px-4 min-w-[240px] border-b border-slate-800">Nama Lokasi & Bangunan</th>
+                  <th className="py-3 px-3 min-w-[100px] border-b border-slate-800">Jabatan</th>
+                  <th className="py-3 px-4 min-w-[220px] border-b border-slate-800">Penyelia Lokasi</th>
+                  <th className="py-3 px-3 min-w-[100px] text-center border-b border-slate-800">Bil. Aset</th>
+                  <th className="py-3 px-3 min-w-[150px] border-b border-slate-800">Status Pemeriksaan</th>
+                  <th className="py-3 px-4 min-w-[150px] text-center border-b border-slate-800">Tindakan</th>
                 </tr>
-              ) : (
-                filteredLocations.map((loc, idx) => {
-                  const isSelesai = loc.statusPemeriksaan === 'Selesai';
-                  const isSedang = loc.statusPemeriksaan === 'Sedang Dijalankan';
+              </thead>
+              <tbody className="divide-y divide-slate-200 bg-white">
+                {filteredLocations.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-slate-600 text-sm">Tiada lokasi dijumpai.</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Sila semak semula kata kunci atau ubah penapis di atas.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLocations.map((loc, idx) => {
+                    const isSelesai = loc.statusPemeriksaan === 'Selesai';
+                    const isSedang = loc.statusPemeriksaan === 'Sedang Dijalankan';
 
-                  return (
-                    <tr 
-                      key={loc.id} 
-                      className={`hover:bg-slate-50/80 transition group ${
-                        idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'
-                      }`}
-                    >
-                      {/* 1. Index */}
-                      <td className="py-3.5 px-3 text-center text-slate-400 font-mono text-xs">
-                        {idx + 1}
-                      </td>
+                    return (
+                      <tr 
+                        key={loc.id} 
+                        className={`hover:bg-slate-50/80 transition group ${
+                          idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'
+                        }`}
+                      >
+                        {/* 1. Index */}
+                        <td className="py-3.5 px-3 text-center text-slate-400 font-mono text-xs">
+                          {idx + 1}
+                        </td>
 
-                      {/* 2. Room Code with quick copy */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-xs transition">
-                            {loc.kodRuang}
-                          </span>
-                          <button
-                            onClick={() => handleCopyCode(loc.kodRuang)}
-                            title="Salin Kod Ruang"
-                            className="p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition opacity-0 group-hover:opacity-100"
-                          >
-                            {copiedCode === loc.kodRuang ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
+                        {/* 2. Kod Lokasi KEW.PA-7 with quick copy */}
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-[11px] leading-snug transition">
+                              {loc.kodRuang}
+                            </span>
+                            <button
+                              onClick={() => handleCopyCode(loc.kodRuang)}
+                              title="Salin Kod Ruang"
+                              className="p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition opacity-0 group-hover:opacity-100"
+                            >
+                              {copiedCode === loc.kodRuang ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
 
-                      {/* 3. Name & Building */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900 text-xs sm:text-sm">
-                          {loc.nama}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                          <Building className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{loc.bangunan}</span>
-                          <span className="text-slate-300">&bull;</span>
-                          <span className="font-medium text-slate-600">{loc.aras}</span>
+                        {/* 3. Name & Building */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-slate-900 text-xs sm:text-sm">
+                            {loc.nama}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                            <Building className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{loc.bangunan}</span>
+                            <span className="text-slate-300">&bull;</span>
+                            <span className="font-medium text-slate-600">{loc.aras}</span>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => setPreviewGpsLocation(loc)}
-                            className="ml-1 px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-mono font-bold flex items-center gap-1 transition cursor-pointer"
-                            title="Lihat Peta GPS OpenStreetMap"
+                            onClick={() => handleViewOnMap(loc)}
+                            className="mt-1 px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-mono font-bold flex items-center gap-1 transition cursor-pointer"
+                            title="Fokus Pada Peta Visual Leaflet OSM"
                           >
                             <MapPin className="w-3 h-3 text-amber-700" />
                             <span>GPS: {loc.latitude ? `${loc.latitude.toFixed(4)}, ${loc.longitude?.toFixed(4)}` : '1.6214, 110.3235'}</span>
                           </button>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* 4. Department */}
-                      <td className="py-3.5 px-3">
-                        <span className="font-mono font-bold text-xs bg-slate-900 text-amber-300 px-2 py-0.5 rounded">
-                          {loc.jabatan}
-                        </span>
-                      </td>
+                        {/* 4. Department */}
+                        <td className="py-3.5 px-3">
+                          <span className="font-mono font-bold text-xs bg-slate-900 text-amber-300 px-2 py-0.5 rounded">
+                            {loc.jabatan}
+                          </span>
+                        </td>
 
-                      {/* 5. Room Category */}
-                      <td className="py-3.5 px-3">
-                        <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-semibold ${
-                          loc.kategoriRuang === 'Makmal Komputer'
-                            ? 'bg-sky-50 text-sky-800 border border-sky-200'
-                            : loc.kategoriRuang === 'Bengkel Teknikal'
-                            ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                            : loc.kategoriRuang === 'Bilik Pelayan'
-                            ? 'bg-purple-50 text-purple-900 border border-purple-200'
-                            : loc.kategoriRuang === 'Studio'
-                            ? 'bg-rose-50 text-rose-900 border border-rose-200'
-                            : 'bg-slate-100 text-slate-800 border border-slate-200'
-                        }`}>
-                          {loc.kategoriRuang}
-                        </span>
-                      </td>
-
-                      {/* 6. Pegawai Bertanggungjawab */}
-                      <td className="py-3.5 px-4">
-                        {loc.pegawaiBertanggungjawabList && loc.pegawaiBertanggungjawabList.length > 0 ? (
-                          <div className="space-y-1">
-                            <div className="text-[10px] font-bold text-amber-800 uppercase font-mono flex items-center gap-1">
-                              <Users className="w-3 h-3 text-amber-600" />
-                              <span>{loc.pegawaiBertanggungjawabList.length} Pegawai Bertanggungjawab:</span>
+                        {/* 5. Pegawai Bertanggungjawab */}
+                        <td className="py-3.5 px-4">
+                          {loc.pegawaiBertanggungjawabList && loc.pegawaiBertanggungjawabList.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {loc.pegawaiBertanggungjawabList.map((off, oidx) => (
+                                <div key={oidx} className="leading-tight">
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-900 font-semibold">
+                                    <UserCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span>{off.nama}</span>
+                                  </div>
+                                  {off.tel && (
+                                    <div className="ml-[18px] text-[10px] text-slate-500 font-mono">
+                                      {off.tel}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                            {loc.pegawaiBertanggungjawabList.map((off, oidx) => (
-                              <div key={oidx} className="flex items-center gap-1.5 text-xs text-slate-900 font-semibold">
-                                <UserCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span>{off.nama}</span>
-                                {off.jawatan && <span className="text-[10px] text-slate-500 font-mono">({off.jawatan})</span>}
+                          ) : (
+                            <div>
+                              <div className="font-semibold text-slate-900 flex items-center gap-1.5 text-xs">
+                                <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span>{loc.penjaga}</span>
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="font-semibold text-slate-900 flex items-center gap-1.5 text-xs">
-                              <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span>{loc.penjaga}</span>
+                              {loc.penjagaTel && (
+                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  {loc.penjagaTel}
+                                </div>
+                              )}
                             </div>
-                            {loc.penjagaJawatan && (
-                              <div className="text-[11px] text-slate-500 mt-0.5">
-                                {loc.penjagaJawatan}
-                              </div>
-                            )}
-                            {loc.penjagaEmel && (
-                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                {loc.penjagaEmel}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
+                          )}
+                        </td>
 
-                      {/* 7. Assets Count */}
-                      <td className="py-3.5 px-3 text-center">
-                        <span className="font-mono font-extrabold text-sm text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
-                          {loc.anggaranAset}
-                        </span>
-                        <span className="block text-[10px] text-slate-400 mt-0.5">unit aset</span>
-                      </td>
+                        {/* 7. Assets Count */}
+                        <td className="py-3.5 px-3 text-center">
+                          <span className="font-mono font-extrabold text-sm text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                            {loc.anggaranAset}
+                          </span>
+                          <span className="block text-[10px] text-slate-400 mt-0.5">unit aset</span>
+                        </td>
 
-                      {/* 8. Inspection Status */}
-                      <td className="py-3.5 px-3">
-                        {isSelesai ? (
-                          <div>
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Selesai</span>
-                            </span>
-                            {loc.tarikhTerakhirDiperiksa && (
-                              <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
-                                {loc.tarikhTerakhirDiperiksa}
+                        {/* 8. Inspection Status */}
+                        <td className="py-3.5 px-3">
+                          {isSelesai ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Selesai</span>
                               </span>
-                            )}
-                          </div>
-                        ) : isSedang ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
-                            <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-                            <span>Sedang Berjalan</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                            <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Belum Mula</span>
-                          </span>
-                        )}
-                      </td>
+                              {loc.tarikhTerakhirDiperiksa && (
+                                <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
+                                  {loc.tarikhTerakhirDiperiksa}
+                                </span>
+                              )}
+                            </div>
+                          ) : isSedang ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
+                              <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                              <span>Sedang Berjalan</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                              <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Belum Mula</span>
+                            </span>
+                          )}
+                        </td>
 
-                      {/* 9. Action Buttons */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {onOpenKewpa7Modal && (
+                        {/* 9. Action Buttons */}
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={onOpenKewpa7Modal}
-                              title="Kemaskini KEW.PA-7 / Senarai Pegawai Bertanggungjawab"
-                              className="p-1.5 rounded-lg text-teal-700 hover:bg-teal-50 transition border border-transparent hover:border-teal-200 flex items-center gap-1 text-[11px] font-semibold"
+                              onClick={() => handleViewOnMap(loc)}
+                              title="Lihat Kedudukan di Peta Visual POLIKU"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition border border-transparent hover:border-amber-200"
+                            >
+                              <MapIcon className="w-4 h-4 text-amber-600" />
+                            </button>
+
+                            <button
+                              onClick={() => void handleDownloadKewpa7Csv(loc)}
+                              disabled={downloadingCsvId === loc.id}
+                              title="Muat turun senarai aset & no. siri pendaftaran KEW.PA-7 (CSV) untuk Daftar Pemeriksaan"
+                              className="p-1.5 rounded-lg text-teal-700 hover:bg-teal-50 transition border border-transparent hover:border-teal-200 flex items-center gap-1 text-[11px] font-semibold disabled:opacity-50"
                             >
                               <FileText className="w-3.5 h-3.5 text-teal-600" />
-                              <span className="hidden xl:inline">KEW.PA-7</span>
+                              <span className="hidden xl:inline">
+                                {downloadingCsvId === loc.id ? 'Menyediakan…' : 'KEW.PA-7'}
+                              </span>
                             </button>
-                          )}
 
-                          {loc.jadualId && onNavigateToSchedule && (
-                            <button
-                              onClick={() => onNavigateToSchedule(loc.jadualId)}
-                              title="Buka Rekod Jadual Pemeriksaan"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 transition border border-transparent hover:border-sky-200"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </button>
-                          )}
+                            {loc.jadualId && onNavigateToSchedule && (
+                              <button
+                                onClick={() => onNavigateToSchedule(loc.jadualId)}
+                                title="Buka Rekod Jadual Pemeriksaan"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 transition border border-transparent hover:border-sky-200"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </button>
+                            )}
 
-                          <button
-                            onClick={() => handleOpenEdit(loc)}
-                            title="Kemaskini Maklumat Lokasi"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition border border-transparent hover:border-amber-200"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
+                            {canEditLocation(loc) && (
+                              <button
+                                onClick={() => handleOpenEdit(loc)}
+                                title="Kemaskini Maklumat Lokasi"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition border border-transparent hover:border-amber-200"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                            )}
 
-                          <button
-                            onClick={() => {
-                              if (confirm(`Adakah anda pasti ingin memadam rekod lokasi "${loc.nama}" (${loc.kodRuang})?`)) {
-                                onDeleteLocation(loc.id);
-                              }
-                            }}
-                            title="Padam Rekod Lokasi"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition border border-transparent hover:border-rose-200"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                            {manageScope.isAdmin && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Adakah anda pasti ingin memadam rekod lokasi "${loc.nama}" (${loc.kodRuang})?`)) {
+                                   onDeleteLocation(loc.id);
+                                  }
+                                }}
+                                title="Padam Rekod Lokasi"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition border border-transparent hover:border-rose-200"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer info bar */}
+          <div className="bg-slate-50 p-3.5 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2 font-mono">
+            <span>Pematuhan 1PP AM 2.4 Para 24 &bull; Borang KEW.PA-7 Wajib Dipamerkan di Pintu Masuk Setiap Ruang</span>
+            <span>Jumlah Aset Berdaftar: <strong className="text-slate-800">{stats.totalAset} Unit</strong></span>
+          </div>
         </div>
-
-        {/* Footer info bar */}
-        <div className="bg-slate-50 p-3.5 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2 font-mono">
-          <span>Pematuhan 1PP AM 2.4 Para 24 &bull; Borang KEW.PA-7 Wajib Dipamerkan di Pintu Masuk Setiap Ruang</span>
-          <span>Jumlah Aset Berdaftar: <strong className="text-slate-800">{stats.totalAset} Unit</strong></span>
-        </div>
-      </div>
+      )}
 
       {/* Add / Edit Location Modal */}
       {showAddEditModal && (
@@ -771,6 +1009,26 @@ export default function DirektoriLokasiSection({
                   </div>
                 )}
 
+                {extractDiagnostic && (
+                  <div className="p-2.5 rounded-lg bg-rose-950/70 border border-rose-600/60 text-rose-200 text-[11px] space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <span>
+                        Medan tidak dapat dihurai: <strong>{extractDiagnostic.missing.join(', ')}</strong>.
+                        Sila isi secara manual.
+                      </span>
+                    </div>
+                    <details className="bg-slate-950/60 rounded border border-rose-700/50">
+                      <summary className="px-2 py-1 cursor-pointer font-semibold text-rose-200">
+                        Teks PDF dikesan
+                      </summary>
+                      <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words px-2 py-1 font-mono text-[10px] text-slate-300">
+                        {extractDiagnostic.preview}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+
                 {isExtractingKewpa7 ? (
                   <div className="py-4 text-center space-y-2">
                     <RefreshCw className="w-6 h-6 text-amber-400 animate-spin mx-auto" />
@@ -810,26 +1068,50 @@ export default function DirektoriLokasiSection({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kod Ruang Rasmi *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Kod Lokasi KEW.PA-7 *</label>
                   <input
                     type="text"
                     required
                     value={formData.kodRuang || ''}
-                    onChange={(e) => setFormData({ ...formData, kodRuang: e.target.value })}
-                    placeholder="cth: MAK-JTMK-03, BKG-JKM-05"
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const segments = parseKodLokasi(raw);
+                      setFormData((prev) =>
+                        raw.includes('/')
+                          ? {
+                              ...prev,
+                              kodRuang: raw,
+                              bangunan: segments.bangunan || prev.bangunan,
+                              aras: segments.aras || prev.aras,
+                            }
+                          : { ...prev, kodRuang: raw }
+                      );
+                    }}
+                    placeholder="130101 / BGN / JKM1 / 01 / B09"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono focus:border-amber-500 focus:outline-none"
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">Format: KATEGORI-JABATAN-NO</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    Segmen: kod ruang / kategori / bangunan / aras / bilik. Bangunan &amp; Aras diisi automatik.
+                  </span>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Jabatan Pemilik *</label>
                   <select
                     value={formData.jabatan || 'JTMK'}
-                    onChange={(e) => setFormData({ ...formData, jabatan: e.target.value })}
+                    onChange={(e) => {
+                      const newDept = e.target.value;
+                      const newCoords = getDeptDefaultCoords(newDept);
+                      setFormData((prev) => ({
+                        ...prev,
+                        jabatan: newDept,
+                        latitude: editingLocation ? prev.latitude : newCoords.lat,
+                        longitude: editingLocation ? prev.longitude : newCoords.lng,
+                      }));
+                    }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none font-medium"
                   >
-                    {DEPARTMENTS.map((dept) => (
+                    {departments.map((dept) => (
                       <option key={dept.id} value={dept.id}>
                         {dept.id} - {dept.name}
                       </option>
@@ -850,72 +1132,89 @@ export default function DirektoriLokasiSection({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kategori Ruang</label>
-                  <select
-                    value={formData.kategoriRuang || 'Makmal Komputer'}
-                    onChange={(e) => setFormData({ ...formData, kategoriRuang: e.target.value as any })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
-                  >
-                    <option value="Makmal Komputer">Makmal Komputer</option>
-                    <option value="Bengkel Teknikal">Bengkel Teknikal</option>
-                    <option value="Bilik Kuliah">Bilik Kuliah</option>
-                    <option value="Bilik Pelayan">Bilik Pelayan</option>
-                    <option value="Stor & Arkib">Stor & Arkib</option>
-                    <option value="Studio">Studio</option>
-                    <option value="Pusat Sumber">Pusat Sumber</option>
-                    <option value="Pejabat Pentadbiran">Pejabat Pentadbiran</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Bangunan / Blok</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Bangunan / Blok *</label>
                   <input
                     type="text"
+                    required
                     value={formData.bangunan || ''}
                     onChange={(e) => setFormData({ ...formData, bangunan: e.target.value })}
-                    placeholder="cth: Blok E (ICT), Blok C"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
+                    placeholder="cth: JKM1"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono focus:border-amber-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Aras / Tingkat</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Aras / Tingkat *</label>
                   <input
                     type="text"
+                    required
                     value={formData.aras || ''}
                     onChange={(e) => setFormData({ ...formData, aras: e.target.value })}
-                    placeholder="cth: Aras 2, Aras Bawah"
+                    placeholder="cth: Aras 1"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
                   />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    Kategori ruang dijajarkan automatik daripada nama ruang.
+                  </span>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-slate-100">
                 <h4 className="font-bold text-slate-800 mb-2">Maklumat Pegawai Penjaga Ruang</h4>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Nama Pegawai Penjaga *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.penjaga || ''}
-                      onChange={(e) => setFormData({ ...formData, penjaga: e.target.value })}
-                      placeholder="cth: En. Mohd Faiz Bin Azmi"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
-                    />
+                    <label className="block font-semibold text-slate-700 mb-1">Pegawai Penjaga</label>
+                    <select
+                      value={
+                        officers.find(
+                          (item) =>
+                            (item.id && item.id === formData.pegawaiBertanggungjawabList?.[0]?.id) ||
+                            item.name === formData.pegawaiBertanggungjawabList?.[0]?.nama
+                        )?.id || ''
+                      }
+                      onChange={(e) => {
+                        const officer = officers.find((item) => item.id === e.target.value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          pegawaiBertanggungjawabList: officer
+                            ? [
+                                {
+                                  id: officer.id || officer.email,
+                                  nama: officer.name,
+                                  jawatan: officer.role,
+                                  emel: officer.email,
+                                  tel: officer.phone,
+                                },
+                              ]
+                            : [],
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none bg-white font-medium"
+                    >
+                      <option value="">— Belum Dilantik (boleh kosong) —</option>
+                      {officers.map((officer) => (
+                        <option key={officer.id || officer.email} value={officer.id || ''}>
+                          {officer.name}
+                          {officer.role ? ` — ${officer.role}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Diambil daripada Direktori Pegawai (jabatan &amp; peranan diselaraskan di sana).
+                    </span>
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Jawatan & Gred</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Jawatan</label>
                     <input
                       type="text"
-                      value={formData.penjagaJawatan || ''}
-                      onChange={(e) => setFormData({ ...formData, penjagaJawatan: e.target.value })}
-                      placeholder="cth: Penolong Pegawai TM (FA29)"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
+                      readOnly
+                      value={formData.pegawaiBertanggungjawabList?.[0]?.jawatan || ''}
+                      placeholder="Diisi automatik daripada direktori"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -924,55 +1223,55 @@ export default function DirektoriLokasiSection({
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Emel Rasmi Pegawai</label>
                     <input
-                      type="email"
-                      value={formData.penjagaEmel || ''}
-                      onChange={(e) => setFormData({ ...formData, penjagaEmel: e.target.value })}
-                      placeholder="faiz@poliku.edu.my"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none font-mono"
+                      type="text"
+                      readOnly
+                      value={formData.pegawaiBertanggungjawabList?.[0]?.emel || ''}
+                      placeholder="Diisi automatik daripada direktori"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 font-mono focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">No. Telefon / Sambungan</label>
+                    <label className="block font-semibold text-slate-700 mb-1">No. Telefon</label>
                     <input
                       type="text"
-                      value={formData.penjagaTel || ''}
-                      onChange={(e) => setFormData({ ...formData, penjagaTel: e.target.value })}
-                      placeholder="082-845510 Ext 124"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none font-mono"
+                      readOnly
+                      value={formData.pegawaiBertanggungjawabList?.[0]?.tel || ''}
+                      placeholder="Diisi automatik daripada direktori"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 font-mono focus:outline-none"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Anggaran Bilangan Aset</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formData.anggaranAset || 30}
-                    onChange={(e) => setFormData({ ...formData, anggaranAset: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono focus:border-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Status Pemeriksaan Fizikal</label>
-                  <select
-                    value={formData.statusPemeriksaan || 'Belum Mula'}
-                    onChange={(e) => setFormData({ ...formData, statusPemeriksaan: e.target.value as any })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
-                  >
-                    <option value="Belum Mula">Belum Mula</option>
-                    <option value="Sedang Dijalankan">Sedang Dijalankan</option>
-                    <option value="Selesai">Selesai</option>
-                  </select>
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
+                  <Layers className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Bilangan aset:</strong> {editingLocation?.anggaranAset ?? 0} unit — diambil terus
+                    daripada senarai aset KEW.PA-7. <strong>Status pemeriksaan</strong> ditetapkan oleh jadual
+                    pemeriksaan, bukan di sini.
+                  </span>
                 </div>
               </div>
 
               {/* Pemetaan GPS & OpenStreetMap (Interactive Leaflet Map) */}
-              <div className="pt-3 border-t border-slate-200">
+              <div className="pt-3 border-t border-slate-200 space-y-2.5">
+                <div className="bg-slate-900 text-white p-3 rounded-xl flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-xs text-white">Penetapan Lokasi GPS (OpenStreetMap)</h4>
+                      <p className="text-[10px] text-slate-300">
+                        Klik pada peta, tarik pin, atau gunakan GPS peranti untuk tetapkan koordinat tepat ruang ini.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-amber-400 text-slate-950 font-bold px-2 py-0.5 rounded font-mono">
+                    Wajib &bull; GPS
+                  </span>
+                </div>
+
                 <GpsMapPicker
                   lat={formData.latitude || 1.621425}
                   lng={formData.longitude || 110.323580}
@@ -985,7 +1284,7 @@ export default function DirektoriLokasiSection({
                     }));
                   }}
                   readOnly={false}
-                  height="220px"
+                  height="230px"
                 />
               </div>
 

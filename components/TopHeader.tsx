@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { 
   Boxes, 
@@ -40,7 +38,7 @@ const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
   },
   jabatan: {
     title: 'Direktori Jabatan',
-    subtitle: 'Profil 12 Jabatan & Matriks Pegawai Penyelaras Aset',
+    subtitle: 'Profil Jabatan & Matriks Pegawai Penyelaras Aset',
   },
   praJkpak: {
     title: 'Kompilasi Pra-JKPAK',
@@ -51,8 +49,8 @@ const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
     subtitle: 'Tatacara Pengurusan Aset Alih & Integriti Pemeriksaan',
   },
   direktori: {
-    title: 'Direktori Pegawai & 6 Peranan Rasmi',
-    subtitle: 'Ketua Jabatan, KP, Penolong Pegawai Aset, Penyelia Lokasi, Admin & Pemeriksa',
+    title: 'Direktori Pegawai',
+    subtitle: 'Pengguna, Jawatan & Lantikan (PBAC)',
   },
   audit: {
     title: 'Jejak Audit PBAC',
@@ -96,9 +94,9 @@ export default function TopHeader({
           </div>
           <div className="leading-tight">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm tracking-tight">Portal Aset</span>
+              <span className="font-bold text-sm tracking-tight">Portal Pemeriksaan Aset</span>
               <span className="text-[9px] bg-amber-400 text-slate-950 font-bold px-1.5 py-0.2 rounded font-mono">
-                e-JAS
+                Inspect-Able
               </span>
             </div>
             <p className="text-[10px] text-slate-400">Politeknik Kuching Sarawak</p>
@@ -144,7 +142,7 @@ export default function TopHeader({
         
         {/* Breadcrumb & Section Name */}
         <div className="flex items-center space-x-2 text-xs">
-          <span className="font-semibold text-slate-400">Portal Aset POLIKU</span>
+          <span className="font-semibold text-slate-400">Portal Pemeriksaan Aset POLIKU</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
           <span className="font-bold text-slate-900 text-sm">
             {currentInfo.title}

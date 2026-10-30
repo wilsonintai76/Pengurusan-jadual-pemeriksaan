@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useMemo } from 'react';
 import { 
   CalendarDays, 
@@ -29,6 +27,7 @@ import {
   D3AssetHealthChart 
 } from '@/components/charts/D3HomeCharts';
 import FullMonthCalendar from '@/components/calendar/FullMonthCalendar';
+import TakwimSesiCard from '@/components/TakwimSesiCard';
 
 interface HomeSectionProps {
   schedules: InspectionSchedule[];
@@ -36,6 +35,8 @@ interface HomeSectionProps {
   onOpenPraJkpak: () => void;
   onOpenClaim: () => void;
   onOpenPekeliling: () => void;
+  /** Tahun sesi daripada tetapan (cth. "2026"). */
+  tahunSesi?: string;
 }
 
 export default function HomeSection({
@@ -44,11 +45,13 @@ export default function HomeSection({
   onOpenPraJkpak,
   onOpenClaim,
   onOpenPekeliling,
+  tahunSesi,
 }: HomeSectionProps) {
   const [showOverdueToast, setShowOverdueToast] = React.useState<boolean>(true);
   const [calendarMode, setCalendarMode] = React.useState<'fullMonth' | 'urgent7Days'>('fullMonth');
   const [deadlineFilter, setDeadlineFilter] = React.useState<'all' | 'urgent' | 'soon'>('all');
-  const today = useMemo(() => new Date('2026-10-23'), []);
+  const today = useMemo(() => new Date(), []);
+  const tahunAktif = tahunSesi || String(today.getFullYear());
 
   // Compute 7-day deadline calendar list with color-coded urgency levels
   const deadline7DaysList = useMemo(() => {
@@ -174,7 +177,7 @@ export default function HomeSection({
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="bg-rose-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                    Peringatan Automatik e-JAS
+                    Peringatan Automatik Inspect-Able
                   </span>
                   <span className="text-xs text-rose-300 font-mono hidden sm:inline">
                     Pematuhan 1PP AM 2.4
@@ -250,7 +253,7 @@ export default function HomeSection({
         <div className="max-w-3xl space-y-3 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-amber-300 border border-slate-700/80">
             <CalendarDays className="w-3.5 h-3.5 text-amber-400" />
-            <span>Takwim Rasmi Sesi Pemeriksaan Aset Alih 2026</span>
+            <span>Takwim Rasmi Sesi Pemeriksaan Aset Alih {tahunAktif}</span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
@@ -335,7 +338,7 @@ export default function HomeSection({
         </div>
 
         {/* KPI 3: Overdue Tasks */}
-        <div className="bg-white p-5 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-xs space-y-1">
+        <div className="p-5 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-xs space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wider font-mono">
               Tugasan Melepasi Tempoh
@@ -353,7 +356,7 @@ export default function HomeSection({
         </div>
 
         {/* KPI 4: Completion Rate */}
-        <div className="bg-white p-5 rounded-2xl border border-emerald-200 bg-emerald-50/20 shadow-xs space-y-1">
+        <div className="p-5 rounded-2xl border border-emerald-200 bg-emerald-50/20 shadow-xs space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider font-mono">
               Pencapaian Selesai
@@ -385,6 +388,9 @@ export default function HomeSection({
       {/* 4. D3 Asset Health & Physical Condition Meter */}
       <D3AssetHealthChart schedules={schedules} />
 
+      {/* 4.4. Takwim perancangan sesi — makluman untuk semua pengguna (baca sahaja) */}
+      <TakwimSesiCard tahun={tahunAktif} />
+
       {/* 4.5. Extended Takwim & Kalendar Pemeriksaan: Full-Month View & 7-Day Urgency Window */}
       <div className="space-y-4">
         
@@ -396,7 +402,7 @@ export default function HomeSection({
                 <Calendar className="w-4 h-4" />
               </span>
               <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">
-                Takwim & Kalendar Pemeriksaan Aset Alih 2026
+                Takwim & Kalendar Pemeriksaan Aset Alih {tahunAktif}
               </h3>
             </div>
             <p className="text-xs text-slate-500">
@@ -592,7 +598,7 @@ export default function HomeSection({
                               : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-2xs'
                           }`}
                         >
-                          <span>Urus e-JAS</span>
+                          <span>Urus Inspect-Able</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -629,7 +635,7 @@ export default function HomeSection({
               onClick={onOpenEjas}
               className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition self-start sm:self-auto flex items-center gap-1.5 shadow-2xs"
             >
-              <span>Urus di e-JAS</span>
+              <span>Urus di Inspect-Able</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -705,13 +711,13 @@ export default function HomeSection({
             Penyelarasan & Pendaftaran Jadual
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Penyelaras Aset Jabatan mendaftarkan makmal dan bengkel di bawah bidang kuasa masing-masing ke dalam takwim tahunan e-JAS lengkap dengan Pegawai Penjaga Ruang (*room custodian*).
+            Penyelaras Aset Jabatan mendaftarkan makmal dan bengkel di bawah bidang kuasa masing-masing ke dalam takwim tahunan Inspect-Able lengkap dengan Pegawai Penjaga Ruang (*room custodian*).
           </p>
           <button
             onClick={onOpenEjas}
             className="text-xs text-sky-700 font-bold hover:underline inline-flex items-center gap-1 pt-1"
           >
-            <span>Lihat Takwim e-JAS</span>
+            <span>Lihat Takwim Inspect-Able</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { 
   BookOpen, 
@@ -48,7 +46,7 @@ export default function PekelilingSection() {
             Pegawai Pengawal atau Pengarah Politeknik hendaklah melantik sekurang-kurangnya <strong>dua (2) orang Pegawai Pemeriksa</strong> yang tidak menguruskan aset tersebut secara langsung. Pegawai <strong>dilarang mutlak</strong> daripada memeriksa lokasi di mana beliau merupakan Pegawai Penjaga Ruang (*room custodian*).
           </p>
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-700">
-            <strong>Implikasi Sistem e-JAS:</strong> Modul PBAC menyekat sebarang cubaan pegawai untuk menuntut slot pemeriksaan di makmal jagaan sendiri.
+            <strong>Implikasi Sistem Inspect-Able:</strong> Modul PBAC menyekat sebarang cubaan pegawai untuk menuntut slot pemeriksaan di makmal jagaan sendiri.
           </div>
         </div>
 

@@ -1,7 +1,5 @@
-'use client';
-
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Navigation, Crosshair, Check, Sparkles } from 'lucide-react';
+import { MapPin, Crosshair, CheckCircle2 } from 'lucide-react';
 
 interface GpsMapPickerProps {
   lat?: number;
@@ -15,13 +13,10 @@ interface GpsMapPickerProps {
 const POLIKU_DEFAULT_LAT = 1.621425;
 const POLIKU_DEFAULT_LNG = 110.323580;
 
-const CAMPUS_SHORTCUTS = [
-  { name: 'JKM - Kejuruteraan Mekanikal', lat: 1.621425, lng: 110.323580 },
-  { name: 'JTMK - Teknologi Maklumat', lat: 1.621810, lng: 110.324100 },
-  { name: 'JKE - Kejuruteraan Elektrik', lat: 1.621050, lng: 110.322900 },
-  { name: 'JKA - Kejuruteraan Awam', lat: 1.620800, lng: 110.324500 },
-  { name: 'Pentadbiran & UAP POLIKU', lat: 1.622500, lng: 110.323000 },
-];
+/**
+ * Peta GPS ruang. Tiada senarai "zon/blok" pra-tetap di sini — koordinat sebenar
+ * ditetapkan melalui klik/drag pada peta, GPS peranti, atau input latitud/longitud.
+ */
 
 export default function GpsMapPicker({
   lat = POLIKU_DEFAULT_LAT,
@@ -35,17 +30,26 @@ export default function GpsMapPicker({
   const mapInstanceRef = useRef<any>(null);
   const markerInstanceRef = useRef<any>(null);
 
-  const [prevProps, setPrevProps] = useState({ lat, lng });
   const [currentLat, setCurrentLat] = useState<number>(lat || POLIKU_DEFAULT_LAT);
   const [currentLng, setCurrentLng] = useState<number>(lng || POLIKU_DEFAULT_LNG);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [gpsLocked, setGpsLocked] = useState<boolean>(false);
+  const [tilesReady, setTilesReady] = useState<boolean>(false);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-  if (prevProps.lat !== lat || prevProps.lng !== lng) {
-    setPrevProps({ lat, lng });
-    setCurrentLat(lat || POLIKU_DEFAULT_LAT);
-    setCurrentLng(lng || POLIKU_DEFAULT_LNG);
-  }
+  // Sync state if incoming props change externally
+  useEffect(() => {
+    if (lat && lng && (lat !== currentLat || lng !== currentLng)) {
+      setCurrentLat(lat);
+      setCurrentLng(lng);
+      if (mapInstanceRef.current && markerInstanceRef.current) {
+        mapInstanceRef.current.setView([lat, lng], 17);
+        markerInstanceRef.current.setLatLng([lat, lng]);
+        markerInstanceRef.current.setPopupContent(`<b>${locationName}</b><br>GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      }
+    }
+  }, [lat, lng, locationName]);
 
   useEffect(() => {
     let isMounted = true;
@@ -54,7 +58,7 @@ export default function GpsMapPicker({
     import('leaflet').then((L) => {
       if (!isMounted || !mapContainerRef.current) return;
 
-      // Fix Leaflet default icon URL issues in Webpack/Next.js
+      // Fix Leaflet default icon URL issues in bundlers (Vite/Webpack)
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -69,10 +73,12 @@ export default function GpsMapPicker({
           17
         );
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const layer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(map);
+
+        layer.on('load', () => setTilesReady(true));
 
         const marker = L.marker([currentLat, currentLng], {
           draggable: !readOnly,
@@ -86,6 +92,7 @@ export default function GpsMapPicker({
             const position = event.target.getLatLng();
             setCurrentLat(position.lat);
             setCurrentLng(position.lng);
+            setGpsLocked(true);
             onChangeGps(position.lat, position.lng);
             marker.setPopupContent(`<b>${locationName}</b><br>GPS: ${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`).openPopup();
           });
@@ -96,6 +103,7 @@ export default function GpsMapPicker({
             marker.setLatLng([clickLat, clickLng]);
             setCurrentLat(clickLat);
             setCurrentLng(clickLng);
+            setGpsLocked(true);
             onChangeGps(clickLat, clickLng);
             marker.setPopupContent(`<b>${locationName}</b><br>GPS: ${clickLat.toFixed(6)}, ${clickLng.toFixed(6)}`).openPopup();
           });
@@ -103,6 +111,17 @@ export default function GpsMapPicker({
 
         mapInstanceRef.current = map;
         markerInstanceRef.current = marker;
+
+        // Peta dalam modal boleh berubah saiz selepas animasi/scroll — pastikan Leaflet
+        // sentiasa mengira semula dimensi, jika tidak jubin tidak dimuatkan (kotak kelabu).
+        const invalidate = () => mapInstanceRef.current?.invalidateSize();
+        [0, 120, 300, 700].forEach((delay) => window.setTimeout(invalidate, delay));
+
+        if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+          resizeObserverRef.current = new ResizeObserver(invalidate);
+          resizeObserverRef.current.observe(mapContainerRef.current);
+        }
+        window.addEventListener('resize', invalidate);
       } else {
         // Update existing map & marker
         mapInstanceRef.current.setView([currentLat, currentLng], 17);
@@ -115,8 +134,15 @@ export default function GpsMapPicker({
 
     return () => {
       isMounted = false;
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerInstanceRef.current = null;
+      }
     };
-  }, [currentLat, currentLng, locationName, readOnly, onChangeGps]);
+  }, [readOnly]);
 
   // Use Browser Geolocation API
   const handleGetCurrentLocation = () => {
@@ -134,22 +160,24 @@ export default function GpsMapPicker({
         const newLng = position.coords.longitude;
         setCurrentLat(newLat);
         setCurrentLng(newLng);
+        setGpsLocked(true);
         if (onChangeGps) onChangeGps(newLat, newLng);
+
+        if (mapInstanceRef.current && markerInstanceRef.current) {
+          mapInstanceRef.current.flyTo([newLat, newLng], 18, { animate: true, duration: 1 });
+          markerInstanceRef.current.setLatLng([newLat, newLng]);
+          markerInstanceRef.current.setPopupContent(`<b>${locationName}</b><br>GPS dikesan: ${newLat.toFixed(6)}, ${newLng.toFixed(6)}`).openPopup();
+        }
+
         setIsLocating(false);
       },
       (error) => {
         console.error('Geolocation Error:', error);
-        setGeoError('Tidak dapat mengesan lokasi GPS. Sila beri kebenaran lokasi pada peranti.');
+        setGeoError('Tidak dapat mengesan lokasi GPS. Sila beri kebenaran lokasi pada peranti anda.');
         setIsLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  };
-
-  const handleSelectShortcut = (presetLat: number, presetLng: number) => {
-    setCurrentLat(presetLat);
-    setCurrentLng(presetLng);
-    if (onChangeGps) onChangeGps(presetLat, presetLng);
   };
 
   return (
@@ -189,9 +217,15 @@ export default function GpsMapPicker({
           className="w-full z-0 bg-slate-100"
         />
 
+        {!tilesReady && (
+          <div className="absolute inset-0 grid place-items-center pointer-events-none bg-slate-100/60">
+            <span className="text-[11px] font-semibold text-slate-500">Memuatkan peta OpenStreetMap…</span>
+          </div>
+        )}
+
         {!readOnly && (
           <div className="absolute top-2 right-2 z-10 bg-slate-900/90 text-white backdrop-blur-xs px-2.5 py-1 rounded-lg text-[10px] font-mono border border-slate-700/80 shadow-xs">
-            Klik/Tarik Pin Pada Peta
+            Klik / Tarik Pin Pada Peta
           </div>
         )}
       </div>
@@ -209,7 +243,11 @@ export default function GpsMapPicker({
                 onChange={(e) => {
                   const val = parseFloat(e.target.value) || POLIKU_DEFAULT_LAT;
                   setCurrentLat(val);
+                  setGpsLocked(true);
                   if (onChangeGps) onChangeGps(val, currentLng);
+                  if (markerInstanceRef.current) {
+                    markerInstanceRef.current.setLatLng([val, currentLng]);
+                  }
                 }}
                 className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-mono text-xs font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -224,26 +262,32 @@ export default function GpsMapPicker({
                 onChange={(e) => {
                   const val = parseFloat(e.target.value) || POLIKU_DEFAULT_LNG;
                   setCurrentLng(val);
+                  setGpsLocked(true);
                   if (onChangeGps) onChangeGps(currentLat, val);
+                  if (markerInstanceRef.current) {
+                    markerInstanceRef.current.setLatLng([currentLat, val]);
+                  }
                 }}
                 className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-mono text-xs font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />
             </div>
           </div>
 
-          {/* Quick Shortcuts for POLIKU Blocks */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="text-[10px] font-bold text-slate-400 font-mono">Pilihan Zon Kampus:</span>
-            {CAMPUS_SHORTCUTS.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectShortcut(item.lat, item.lng)}
-                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 border border-slate-200 transition"
-              >
-                {item.name}
-              </button>
-            ))}
+          {/* Pilihan pantas mock dibuang — koordinat sebenar sahaja (klik peta / GPS / lat-lng). */}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 bg-emerald-50/70 p-2 rounded-lg border border-emerald-200/80 font-mono">
+            <span className="flex items-center gap-1 text-emerald-800 font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Koordinat GPS: <strong>{currentLat.toFixed(6)}, {currentLng.toFixed(6)}</strong>
+            </span>
+            <a
+              href={`https://www.openstreetmap.org/?mlat=${currentLat}&mlon=${currentLng}#map=18/${currentLat}/${currentLng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sky-700 hover:underline font-bold"
+            >
+              Buka di OpenStreetMap
+            </a>
           </div>
         </div>
       ) : (

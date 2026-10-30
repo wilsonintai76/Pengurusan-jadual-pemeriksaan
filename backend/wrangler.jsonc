@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "portal-aset-poliku-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // 1. Cloudflare D1 Serverless SQL Database
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "poliku-aset-d1",
+      "database_id": "c43471bf-b53c-4417-a011-22c4c918fbfa"
+    }
+  ],
+
+  // 2. Cloudflare KV for Ultra-fast Key-Value & Settings Cache
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "d07627372fea41e6a6b09aa8dda645bc"
+    }
+  ],
+
+  // 3. Cloudflare R2 Object Storage for PDF & KEW.PA documents (Free tier: 10GB, $0 egress)
+  "r2_buckets": [
+    {
+      "binding": "R2_BUCKET",
+      "bucket_name": "poliku-aset-documents"
+    }
+  ],
+
+  // 4. Cloudflare Workers AI (Free Tier: 10k Neurons/day)
+  "ai": {
+    "binding": "AI"
+  },
+
+  // 5. Cron Trigger harian: imbasan luput lantikan pemeriksa (peringatan 60 hari)
+  "triggers": {
+    "crons": ["0 1 * * *"]
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

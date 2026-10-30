@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { 
   Boxes, 
@@ -16,9 +14,12 @@ import {
   Crosshair,
   Plus,
   SlidersHorizontal,
-  MapPin
+  MapPin,
+  BadgeCheck,
+  ArrowLeftRight
 } from 'lucide-react';
 import { UserSession } from '@/lib/types';
+import { ROLE_LABELS } from '@/lib/systemRoles';
 
 interface SidebarNavProps {
   currentUser: UserSession | null;
@@ -27,6 +28,8 @@ interface SidebarNavProps {
   onLogout: () => void;
   onSync: () => void;
   praJkpakCount: number;
+  /** Pentadbir Sistem sahaja — Tetapan disembunyikan daripada peranan lain. */
+  isAdmin?: boolean;
   onOpenClaimModal?: () => void;
   onOpenAddSchedule?: () => void;
   onOpenPbacModal?: () => void;
@@ -41,6 +44,7 @@ export default function SidebarNav({
   onLogout,
   onSync,
   praJkpakCount,
+  isAdmin = false,
   onOpenClaimModal,
   onOpenAddSchedule,
   onOpenPbacModal,
@@ -105,9 +109,16 @@ export default function SidebarNav({
       id: 'direktori',
       label: 'Direktori Pegawai',
       icon: Users,
-      badge: '6 Peranan',
+      badge: `${ROLE_LABELS.length} Peranan`,
       badgeColor: 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/30',
-      description: 'Pengguna & Peranan',
+      description: 'Pengguna, Peranan & Lantikan',
+    },
+    {
+      id: 'kitaran',
+      label: 'Kitaran Pemeriksaan',
+      icon: ArrowLeftRight,
+      badge: null,
+      description: 'Kolam & Timbal Balik',
     },
     {
       id: 'audit',
@@ -122,8 +133,9 @@ export default function SidebarNav({
       icon: SlidersHorizontal,
       badge: null,
       description: 'Konfigurasi Sistem',
+      adminOnly: true,
     },
-  ];
+  ].filter((item) => !('adminOnly' in item) || !item.adminOnly || isAdmin);
 
   return (
     <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 h-screen sticky top-0 bg-slate-950 text-slate-200 flex-col justify-between border-r border-slate-800 shadow-sm z-30 select-none no-print">
@@ -137,18 +149,20 @@ export default function SidebarNav({
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center text-amber-400 shadow-inner transition-transform group-hover:scale-105">
             <Boxes className="w-5 h-5 text-amber-400" />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-base text-white tracking-tight">
-                Portal Aset
-              </span>
-              <span className="text-[10px] bg-amber-400 text-slate-950 font-bold px-1.5 py-0.2 rounded font-mono">
-                e-JAS
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-bold text-sm text-white tracking-tight leading-tight">
+                Portal Pemeriksaan Aset
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 leading-tight">
-              Politeknik Kuching Sarawak
-            </p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-[9px] bg-amber-400 text-slate-950 font-bold px-1.5 py-0.2 rounded font-mono">
+                Inspect-Able
+              </span>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                Politeknik Kuching Sarawak
+              </p>
+            </div>
           </div>
         </div>
 

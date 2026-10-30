@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { UserSession } from '@/lib/types';
 import { 
@@ -87,10 +85,10 @@ export default function Header({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">
-                    Portal Aset POLIKU
+                    Portal Pemeriksaan Aset POLIKU
                   </span>
                   <span className="text-[10px] bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded border border-slate-200 uppercase font-mono">
-                    e-JAS
+                    Inspect-Able
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 truncate max-w-[240px] sm:max-w-none">
@@ -122,7 +120,7 @@ export default function Header({
                 }`}
               >
                 <CalendarCheck className="w-3.5 h-3.5" />
-                <span>Sistem e-JAS</span>
+                <span>Sistem Inspect-Able</span>
               </button>
 
               <button
@@ -248,7 +246,7 @@ export default function Header({
                 activeTab === 'ejas' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              e-JAS
+              Inspect-Able
             </button>
             <button
               onClick={() => setActiveTab('praJkpak')}

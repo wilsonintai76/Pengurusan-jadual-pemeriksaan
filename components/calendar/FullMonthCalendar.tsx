@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useMemo } from 'react';
 import { Calendar, dateFnsLocalizer, View, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
@@ -21,7 +19,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { InspectionSchedule } from '@/lib/types';
-import { DEPARTMENTS } from '@/lib/initialData';
+import { useDepartments } from '@/lib/useReferenceData';
 
 const locales = {
   'ms-MY': ms,
@@ -61,6 +59,7 @@ export default function FullMonthCalendar({
   onOpenEjas,
   onSelectSchedule,
 }: FullMonthCalendarProps) {
+  const departments = useDepartments();
   // Current view date anchor (defaulting to Sesi 2026 - e.g. March 2026 or current active period)
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 2, 1)); // March 2026
   const [currentView, setCurrentView] = useState<View>(Views.MONTH);
@@ -124,7 +123,7 @@ export default function FullMonthCalendar({
     const s = event.resource;
     let backgroundColor = '#0284c7'; // default sky
     let borderColor = '#0369a1';
-    let color = '#ffffff';
+    const color = '#ffffff';
 
     if (s.status === 'Selesai') {
       backgroundColor = '#059669'; // Emerald
@@ -182,7 +181,7 @@ export default function FullMonthCalendar({
               <span>Perancangan Sumber & Takwim Penuh (Sesi {currentYear})</span>
             </div>
             <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              <span>Paparan Kalendar Bulanan e-JAS:</span>
+              <span>Paparan Kalendar Bulanan Inspect-Able:</span>
               <span className="text-amber-400 underline decoration-amber-500/50">
                 {currentMonthName} {currentYear}
               </span>
@@ -227,7 +226,7 @@ export default function FullMonthCalendar({
               onClick={onOpenEjas}
               className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
             >
-              <span>Urus di e-JAS</span>
+              <span>Urus di Inspect-Able</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -314,8 +313,8 @@ export default function FullMonthCalendar({
             onChange={(e) => setSelectedDept(e.target.value)}
             className="text-xs bg-slate-50 border border-slate-200 rounded-xl py-1.5 px-3 font-medium text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-slate-900"
           >
-            <option value="SEMUA">Semua Jabatan / Unit ({DEPARTMENTS.length})</option>
-            {DEPARTMENTS.map((d) => (
+            <option value="SEMUA">Semua Jabatan / Unit ({departments.length})</option>
+            {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.id} - {d.name}</option>
             ))}
           </select>
@@ -501,7 +500,7 @@ export default function FullMonthCalendar({
                 }}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-xs"
               >
-                <span>Buka & Kemaskini di e-JAS</span>
+                <span>Buka & Kemaskini di Inspect-Able</span>
                 <ArrowRight className="w-4 h-4 text-amber-400" />
               </button>
 

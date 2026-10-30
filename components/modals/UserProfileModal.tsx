@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { 
   X, 
@@ -26,6 +24,10 @@ import {
   LogOut
 } from 'lucide-react';
 import { UserSession, InspectionSchedule } from '@/lib/types';
+import { MIN_PASSWORD_LENGTH, changePassword } from '@/lib/authClient';
+import { ROLE_LABELS } from '@/lib/systemRoles';
+
+import { useDepartments } from '@/lib/useReferenceData';
 
 interface UserProfileModalProps {
   user: UserSession;
@@ -46,16 +48,17 @@ export default function UserProfileModal({
   onOpenKewpa11,
   showToast,
 }: UserProfileModalProps) {
+  const departments = useDepartments();
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'password'>('profile');
 
   // Form State - Profile
   const [name, setName] = useState(user.name || '');
   const [email] = useState(user.email || '');
-  const [dept, setDept] = useState(user.dept || 'JTMK');
-  const [role, setRole] = useState(user.role || 'Pegawai Pemeriksa Aset');
-  const [grade, setGrade] = useState(user.grade || 'DH44');
-  const [phone, setPhone] = useState(user.phone || '082-845599');
-  const [ext, setExt] = useState(user.ext || '102');
+  const [dept, setDept] = useState(user.dept || '');
+  const [role, setRole] = useState(user.role || '');
+  const [grade, setGrade] = useState(user.grade || '');
+  const [phone, setPhone] = useState(user.phone || '');
+  const [ext, setExt] = useState(user.ext || '');
 
   // Form State - Password
   const [currentPassword, setCurrentPassword] = useState('');
@@ -66,17 +69,6 @@ export default function UserProfileModal({
   const [passSaved, setPassSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
-  // Departments list
-  const DEPARTMENTS = [
-    { code: 'JTMK', name: 'Jabatan Teknologi Maklumat & Komunikasi' },
-    { code: 'JKA', name: 'Jabatan Kejuruteraan Awam' },
-    { code: 'JKE', name: 'Jabatan Kejuruteraan Elektrik' },
-    { code: 'JKM', name: 'Jabatan Kejuruteraan Mekanikal' },
-    { code: 'JP', name: 'Jabatan Perdagangan' },
-    { code: 'JPA', name: 'Jabatan Pengajian Am' },
-    { code: 'JMSK', name: 'Jabatan Matematik, Sains & Komputer' },
-    { code: 'SUKAN', name: 'Unit Sukan, Kokurikulum & Kebudayaan' },
-  ];
 
   // User Inspection History
   const mySchedules = schedules.filter(s => {
@@ -114,18 +106,25 @@ export default function UserProfileModal({
     setTimeout(() => setProfileSaved(false), 3000);
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
       if (showToast) showToast('Sila masukkan kata laluan semasa.', 'error');
       return;
     }
-    if (newPassword.length < 6) {
-      if (showToast) showToast('Kata laluan baru mestilah sekurang-kurangnya 6 aksara.', 'error');
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      if (showToast) showToast(`Kata laluan baru mestilah sekurang-kurangnya ${MIN_PASSWORD_LENGTH} aksara.`, 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
       if (showToast) showToast('Kata laluan baru dan pengesahan tidak sepadan.', 'error');
+      return;
+    }
+
+    try {
+      await changePassword(currentPassword, newPassword);
+    } catch (error) {
+      if (showToast) showToast((error as Error).message || 'Gagal menukar kata laluan.', 'error');
       return;
     }
 
@@ -295,7 +294,7 @@ export default function UserProfileModal({
                 
                 {/* Nama Penuh */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-amber-500" />
                     <span>Nama Penuh Pegawai (Sertai Gelaran)</span>
                   </label>
@@ -311,7 +310,7 @@ export default function UserProfileModal({
 
                 {/* Email (Read-only) */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 text-slate-400" />
                     <span>Alamat Emel Rasmi (POLIKU)</span>
                   </label>
@@ -328,7 +327,7 @@ export default function UserProfileModal({
 
                 {/* Gred Jawatan */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Briefcase className="w-3.5 h-3.5 text-sky-500" />
                     <span>Gred / Skim Perkhidmatan</span>
                   </label>
@@ -351,7 +350,7 @@ export default function UserProfileModal({
 
                 {/* Jabatan / Unit */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-indigo-500" />
                     <span>Jabatan / Unit Bertugas</span>
                   </label>
@@ -360,9 +359,9 @@ export default function UserProfileModal({
                     onChange={(e) => setDept(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   >
-                    {DEPARTMENTS.map(d => (
-                      <option key={d.code} value={d.code}>
-                        {d.code} - {d.name}
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.id} - {d.name}
                       </option>
                     ))}
                   </select>
@@ -370,27 +369,26 @@ export default function UserProfileModal({
 
                 {/* Peranan Dalam Portal */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Peranan Dalam e-JAS</span>
+                    <span>Peranan Dalam Inspect-Able</span>
                   </label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   >
-                    <option value="Ketua Jabatan">Ketua Jabatan (KJ)</option>
-                    <option value="Ketua Program">Ketua Program (KP)</option>
-                    <option value="Penolong Pegawai Aset Jabatan/Unit">Penolong Pegawai Aset Jabatan/Unit (PPA)</option>
-                    <option value="Penyelia Lokasi">Penyelia Lokasi (Pegawai Penjaga Ruang)</option>
-                    <option value="Pentadbir Sistem">Pentadbir Sistem (Super Admin)</option>
-                    <option value="Pegawai Pemeriksa">Pegawai Pemeriksa (1PP AM 2.4)</option>
+                    {ROLE_LABELS.map((label) => (
+                      <option key={label} value={label}>
+                        {label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 {/* No Telefon */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5 text-rose-500" />
                     <span>No. Telefon Bimbit / Pejabat</span>
                   </label>
@@ -511,7 +509,7 @@ export default function UserProfileModal({
                     Tiada jadual pemeriksaan dikaitkan secara terus dengan nama anda lagi.
                   </p>
                   <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                    Anda boleh menuntut lokasi pemeriksaan dalam menu Sistem e-JAS untuk memulakan pengesahan fizikal.
+                    Anda boleh menuntut lokasi pemeriksaan dalam menu Sistem Inspect-Able untuk memulakan pengesahan fizikal.
                   </p>
                 </div>
               ) : (
@@ -600,7 +598,7 @@ export default function UserProfileModal({
               <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 flex items-start gap-3">
                 <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                  <strong className="font-bold block mb-0.5">Keselamatan Akaun Portal Aset:</strong>
+                  <strong className="font-bold block mb-0.5">Keselamatan Akaun Portal Pemeriksaan Aset:</strong>
                   Sila gunakan kata laluan yang kuat untuk melindungi data pemeriksaan fizikal dan kelulusan dokumen KEW.PA-11 mengikut garis panduan keselamatan siber POLIKU.
                 </div>
               </div>
@@ -616,7 +614,7 @@ export default function UserProfileModal({
                 
                 {/* Kata Laluan Semasa */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5 text-slate-400" />
                     <span>Kata Laluan Semasa</span>
                   </label>
@@ -641,7 +639,7 @@ export default function UserProfileModal({
 
                 {/* Kata Laluan Baru */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <KeyRound className="w-3.5 h-3.5 text-amber-500" />
                       <span>Kata Laluan Baru</span>
@@ -683,7 +681,7 @@ export default function UserProfileModal({
 
                 {/* Pengesahan Kata Laluan Baru */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                     <span>Pengesahan Kata Laluan Baru</span>
                   </label>

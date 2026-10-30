@@ -1,9 +1,7 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Save, AlertTriangle } from 'lucide-react';
 import { InspectionSchedule, AssetCategory, InspectionStatus } from '@/lib/types';
-import { CROSS_PAIRS } from '@/lib/initialData';
+import { useCrossPairs, useLocations } from '@/lib/useReferenceData';
 
 interface ScheduleModalProps {
   schedule: InspectionSchedule | null;
@@ -14,27 +12,43 @@ interface ScheduleModalProps {
 
 export default function ScheduleModal({
   schedule,
-  defaultDept = 'JTMK',
+  defaultDept = '',
   onClose,
   onSave,
 }: ScheduleModalProps) {
+  const crossPairs = useCrossPairs();
+  const locations = useLocations();
   const [jabatan, setJabatan] = useState(schedule ? schedule.jabatan : defaultDept);
-  const [kod, setKod] = useState(
-    schedule?.kod || `JAD/${defaultDept}/2026/01`
-  );
+  const [kod, setKod] = useState(schedule?.kod || '');
   const [lokasi, setLokasi] = useState(schedule ? schedule.lokasi : '');
+  const [lokasiId, setLokasiId] = useState('');
   const [kategori, setKategori] = useState<AssetCategory>(
     schedule ? schedule.kategori : 'Semua (Harta Modal & Aset Bernilai Rendah)'
   );
-  const [kuantiti, setKuantiti] = useState(schedule ? (schedule.kuantiti || 10) : 30);
-  const [tarikhMula, setTarikhMula] = useState(schedule ? schedule.tarikhMula : '2026-03-01');
-  const [tarikhTamat, setTarikhTamat] = useState(schedule ? schedule.tarikhTamat : '2026-03-03');
+  const [kuantiti, setKuantiti] = useState(schedule ? (schedule.kuantiti || 0) : 0);
+  const [tarikhMula, setTarikhMula] = useState(schedule ? schedule.tarikhMula : '');
+  const [tarikhTamat, setTarikhTamat] = useState(schedule ? schedule.tarikhTamat : '');
   const [penjaga, setPenjaga] = useState(schedule ? (schedule.penjaga || '') : '');
   const [pemeriksa1, setPemeriksa1] = useState(schedule ? (schedule.pemeriksa1 || '') : '');
   const [pemeriksa2, setPemeriksa2] = useState(schedule ? (schedule.pemeriksa2 || '') : '');
   const [status, setStatus] = useState<InspectionStatus>(schedule ? schedule.status : 'Belum Mula');
   const [catatan, setCatatan] = useState(schedule ? (schedule.catatan || '') : '');
   const [errorMsg, setErrorMsg] = useState('');
+
+  /** Lokasi berdaftar bagi jabatan yang dipilih — satu sumber kebenaran untuk penjaga & aset. */
+  const departmentLocations = locations.filter(
+    (item) => !jabatan || item.jabatan === jabatan
+  );
+  const selectedLocation = locations.find((item) => item.id === lokasiId);
+
+  const handleSelectLocation = (id: string) => {
+    setLokasiId(id);
+    const found = locations.find((item) => item.id === id);
+    if (!found) return;
+    setLokasi(found.nama);
+    setPenjaga(found.penjaga && found.penjaga !== 'Belum Dilantik' ? found.penjaga : '');
+    setKuantiti(found.anggaranAset || 0);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +121,7 @@ export default function ScheduleModal({
                 required
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
-                {Object.keys(CROSS_PAIRS).map((d) => (
+                {Object.keys(crossPairs).map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -132,16 +146,31 @@ export default function ScheduleModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-800 mb-1">
-                Nama Makmal / Bengkel / Bilik <span className="text-rose-500">*</span>
+                Ruang Berdaftar (Direktori Lokasi) <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
+                value={lokasiId}
+                onChange={(e) => handleSelectLocation(e.target.value)}
                 required
-                value={lokasi}
-                onChange={(e) => setLokasi(e.target.value)}
-                placeholder="cth: Makmal Rangkaian & Keselamatan Siber 1"
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-              />
+              >
+                <option value="">— Pilih Ruang —</option>
+                {departmentLocations.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.kodRuang} — {item.nama}
+                  </option>
+                ))}
+              </select>
+              {departmentLocations.length === 0 && (
+                <p className="mt-1 text-[10px] font-semibold text-rose-600">
+                  Tiada ruang berdaftar bagi jabatan ini. Daftar di Direktori Lokasi (muat naik KEW.PA-7) dahulu.
+                </p>
+              )}
+              {lokasi && (
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Nama ruang: <strong>{lokasi}</strong>
+                </p>
+              )}
             </div>
 
             <div>
@@ -165,20 +194,7 @@ export default function ScheduleModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-800 mb-1">
-                Anggaran Bilangan Aset
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={kuantiti}
-                onChange={(e) => setKuantiti(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-slate-900"
-              />
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-800 mb-1">
                 Tarikh Mula <span className="text-rose-500">*</span>
@@ -206,19 +222,20 @@ export default function ScheduleModal({
             </div>
           </div>
 
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-            <label className="block font-bold text-slate-800 text-xs">
-              Pegawai Penjaga Ruang (Room Custodian):
-            </label>
-            <input
-              type="text"
-              value={penjaga}
-              onChange={(e) => setPenjaga(e.target.value)}
-              placeholder="cth: En. Zulhilmi (Penolong Pegawai TM)"
-              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white"
-            />
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+            <div className="text-[11px] text-slate-600">
+              <strong>Penyelia Lokasi:</strong>{' '}
+              {selectedLocation?.penjaga && selectedLocation.penjaga !== 'Belum Dilantik'
+                ? selectedLocation.penjaga
+                : 'Belum Dilantik'}
+              {selectedLocation?.penjagaTel ? ` · ${selectedLocation.penjagaTel}` : ''}
+            </div>
+            <div className="text-[11px] text-slate-600">
+              <strong>Bilangan aset (KEW.PA-7):</strong> {selectedLocation?.anggaranAset ?? 0} unit
+            </div>
             <p className="text-[10px] text-slate-500 italic">
-              * Mengikut 1PP AM 2.4, pegawai ini TIDAK DIBENARKAN memeriksa bilik ini bagi menjamin integriti audit.
+              Diambil terus daripada Direktori Lokasi. Mengikut 1PP AM 2.4, penyelia lokasi TIDAK DIBENARKAN
+              memeriksa bilik ini bagi menjamin integriti audit.
             </p>
           </div>
 
