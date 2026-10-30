@@ -20,6 +20,7 @@ import {
   UserCheck,
   Sparkles,
   FileText,
+  FileSpreadsheet,
   Upload,
   RefreshCw,
   Table as TableIcon,
@@ -792,25 +793,24 @@ export default function DirektoriLokasiSection({
                           </div>
                         </td>
 
-                        {/* 3. Name & Building */}
+                        {/* 3. Name & Building — klik untuk lihat lokasi pada peta */}
                         <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-900 text-xs sm:text-sm">
-                            {loc.nama}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                            <Building className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>{loc.bangunan}</span>
-                            <span className="text-slate-300">&bull;</span>
-                            <span className="font-medium text-slate-600">{loc.aras}</span>
-                          </div>
                           <button
                             type="button"
                             onClick={() => handleViewOnMap(loc)}
-                            className="mt-1 px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-mono font-bold flex items-center gap-1 transition cursor-pointer"
-                            title="Fokus Pada Peta Visual Leaflet OSM"
+                            title="Lihat lokasi pada peta"
+                            className="group text-left cursor-pointer"
                           >
-                            <MapPin className="w-3 h-3 text-amber-700" />
-                            <span>GPS: {loc.latitude ? `${loc.latitude.toFixed(4)}, ${loc.longitude?.toFixed(4)}` : '1.6214, 110.3235'}</span>
+                            <div className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5 group-hover:text-amber-700 group-hover:underline">
+                              <span>{loc.nama}</span>
+                              <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                              <Building className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="group-hover:text-slate-700">{loc.bangunan}</span>
+                              <span className="text-slate-300">&bull;</span>
+                              <span className="font-medium text-slate-600">{loc.aras}</span>
+                            </div>
                           </button>
                         </td>
 
@@ -854,12 +854,22 @@ export default function DirektoriLokasiSection({
                           )}
                         </td>
 
-                        {/* 7. Assets Count */}
+                        {/* 7. Assets Count + muat turun KEW.PA-7 (ikon sahaja) */}
                         <td className="py-3.5 px-3 text-center">
                           <span className="font-mono font-extrabold text-sm text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
                             {loc.anggaranAset}
                           </span>
-                          <span className="block text-[10px] text-slate-400 mt-0.5">unit aset</span>
+                          <span className="flex items-center justify-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                            <span>unit aset</span>
+                            <button
+                              onClick={() => void handleDownloadKewpa7Csv(loc)}
+                              disabled={downloadingCsvId === loc.id}
+                              title="Muat turun senarai aset & no. siri pendaftaran KEW.PA-7 (CSV) untuk Daftar Pemeriksaan"
+                              className="p-1 rounded-md text-teal-700 hover:bg-teal-50 transition border border-transparent hover:border-teal-200 disabled:opacity-50"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-teal-600" />
+                            </button>
+                          </span>
                         </td>
 
                         {/* 8. Inspection Status */}
@@ -892,26 +902,6 @@ export default function DirektoriLokasiSection({
                         {/* 9. Action Buttons */}
                         <td className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => handleViewOnMap(loc)}
-                              title="Lihat Kedudukan di Peta Visual POLIKU"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition border border-transparent hover:border-amber-200"
-                            >
-                              <MapIcon className="w-4 h-4 text-amber-600" />
-                            </button>
-
-                            <button
-                              onClick={() => void handleDownloadKewpa7Csv(loc)}
-                              disabled={downloadingCsvId === loc.id}
-                              title="Muat turun senarai aset & no. siri pendaftaran KEW.PA-7 (CSV) untuk Daftar Pemeriksaan"
-                              className="p-1.5 rounded-lg text-teal-700 hover:bg-teal-50 transition border border-transparent hover:border-teal-200 flex items-center gap-1 text-[11px] font-semibold disabled:opacity-50"
-                            >
-                              <FileText className="w-3.5 h-3.5 text-teal-600" />
-                              <span className="hidden xl:inline">
-                                {downloadingCsvId === loc.id ? 'Menyediakan…' : 'KEW.PA-7'}
-                              </span>
-                            </button>
-
                             {loc.jadualId && onNavigateToSchedule && (
                               <button
                                 onClick={() => onNavigateToSchedule(loc.jadualId)}

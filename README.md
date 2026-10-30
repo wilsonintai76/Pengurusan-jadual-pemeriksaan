@@ -89,7 +89,10 @@ yang diekstrak (contoh `PPAJ` → `PENOLONG_PEGAWAI_ASET`); jawatan tidak dikena
 
 Jadual direktori memaparkan **Kod Lokasi**, Nama & Bangunan/Aras, Jabatan, **Penyelia Lokasi**, **Bil. Aset**, Status dan Tindakan. Lajur Kategori Ruang dibuang (penapis kategori dikekalkan) kerana kategori sudah terwakili oleh kod lokasi.
 
-**Butang KEW.PA-7 pada baris** = muat turun **CSV** senarai aset ruang itu (bukan PDF):
+**Lihat lokasi pada peta** dibuat dengan menekan **nama lokasi / bangunan** (ikon pin) — badge koordinat GPS
+tidak lagi ditampal di bawah nama supaya baris lebih ringkas.
+
+**Butang KEW.PA-7 (ikon sahaja)** berada dalam lajur **Bil. Aset** = muat turun **CSV** senarai aset ruang itu (bukan PDF):
 `Bil, No. Siri Pendaftaran, Keterangan Aset` — tiga lajur sahaja, mencukupi untuk **Daftar Pemeriksaan**
 dalam Sistem Pengurusan Aset Alih. Sumber
 `GET /api/locations/:id/assets`; pembina CSV di [`lib/assetCsv.ts`](lib/assetCsv.ts) (BOM UTF-8 supaya Excel
