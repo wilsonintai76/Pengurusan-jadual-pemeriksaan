@@ -49,6 +49,9 @@ export interface InspectionSchedule {
   pemeriksa2: string;
   pemeriksa2Email?: string;
   penjaga: string;
+  /** No. telefon Penyelia Lokasi (daripada direktori pegawai). */
+  penjagaTel?: string;
+  penjagaEmel?: string;
   status: InspectionStatus;
   catatan?: string;
   kewpa11Doc?: Kewpa11Doc;

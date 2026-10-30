@@ -747,10 +747,10 @@ SELECT
   p1.emel AS pemeriksa1Email,
   COALESCE(p2.nama, '') AS pemeriksa2,
   p2.emel AS pemeriksa2Email,
-  COALESCE(
-    (SELECT o.nama FROM location_custodians lc JOIN officers o ON o.id = lc.officer_id WHERE lc.location_id = s.location_id LIMIT 1),
-    'Belum Dilantik'
-  ) AS penjaga,
+  -- Penyelia Lokasi (lantikan aktif mengatasi penjaga KEW.PA-7) + no. telefon untuk paparan jadual.
+  COALESCE(vl.penjaga, 'Belum Dilantik') AS penjaga,
+  COALESCE(vl.penjagaTel, '') AS penjagaTel,
+  COALESCE(vl.penjagaEmel, '') AS penjagaEmel,
   st.nama AS status,
   s.catatan,
   s.kewpa11_r2_key AS kewpa11DocKey,
@@ -764,6 +764,8 @@ SELECT
   r.tarikh_pengesahan AS tarikhPengesahan
 FROM inspection_schedules s
 JOIN locations loc ON loc.id = s.location_id
+-- Penyelia lokasi + telefon diambil daripada pandangan direktori lokasi (satu sumber).
+LEFT JOIN v_locations_full vl ON vl.id = s.location_id
 JOIN asset_categories ac ON ac.id = s.asset_category_id
 JOIN inspection_statuses st ON st.id = s.status_id
 -- Pemeriksa boleh belum dituntut (NULL) sehingga pemeriksa self-assign.

@@ -37,6 +37,8 @@ interface ScheduleRow {
   pemeriksa2: string;
   pemeriksa2Email: string | null;
   penjaga: string;
+  penjagaTel: string | null;
+  penjagaEmel: string | null;
   status: string;
   catatan: string | null;
   kewpa11DocKey: string | null;
@@ -69,6 +71,8 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
     pemeriksa2: row.pemeriksa2,
     pemeriksa2Email: row.pemeriksa2Email ?? undefined,
     penjaga: row.penjaga,
+    penjagaTel: row.penjagaTel ?? '',
+    penjagaEmel: row.penjagaEmel ?? '',
     status: row.status as ScheduleRecord['status'],
     catatan: row.catatan ?? undefined,
     kewpa11DocKey: row.kewpa11DocKey ?? undefined,

@@ -452,8 +452,16 @@ export default function EjasSection({
                           <span className="text-[10px] text-slate-400 font-mono">
                             {item.kod || '-'}
                           </span>
-                          <span className="text-[10px] text-slate-500">
-                            Penjaga: <span className="font-medium text-slate-700">{item.penjaga || 'Belum diisi'}</span>
+                        </div>
+                        <div className="mt-1 leading-tight">
+                          <span className="block text-[10px] text-slate-500">
+                            Penyelia:{' '}
+                            <span className="font-medium text-slate-700">
+                              {item.penjaga || 'Belum diisi'}
+                            </span>
+                          </span>
+                          <span className="block text-[10px] font-mono text-slate-500">
+                            {item.penjagaTel || 'Tiada no. telefon'}
                           </span>
                         </div>
                       </td>
