@@ -738,18 +738,9 @@ export default function App() {
         setActiveTab={setActiveTab}
         onLogout={handleLogout}
         isAdmin={isSystemAdmin}
+        tahunSesi={settings.sesiTahun}
         onSync={() => showToast('Pangkalan data Cloudflare D1 berjaya disegerakkan.', 'success')}
         praJkpakCount={praJkpakCount}
-        onOpenClaimModal={() => setShowClaimModal(true)}
-        onOpenAddSchedule={() => {
-          if (!currentUser) {
-            showToast('Sila log masuk sebagai Penyelaras Aset Jabatan atau Pentadbir Sistem.', 'info');
-            requireLogin();
-            return;
-          }
-          setEditingSchedule(null);
-          setShowScheduleModal(true);
-        }}
         onOpenPbacModal={() => setShowPbacModal(true)}
         onOpenLogin={() => requireLogin()}
         onOpenUserProfile={() => {
@@ -768,6 +759,7 @@ export default function App() {
         <TopHeader
           currentUser={currentUser}
           activeTab={activeTab}
+          tahunSesi={settings.sesiTahun}
           onSync={() => showToast('Pangkalan data Cloudflare D1 berjaya disegerakkan.', 'success')}
           onOpenClaimModal={() => {
             if (!currentUser) {

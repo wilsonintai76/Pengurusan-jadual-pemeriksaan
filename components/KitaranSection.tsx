@@ -890,7 +890,7 @@ export default function KitaranSection({
                 {isInspector && unclaimed.length > 0 && detail.cycle.status === 'AKTIF' && (
                   <p className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] font-medium text-sky-800">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    {unclaimed.length} slot masih terbuka — tuntut melalui <strong>Tuntut Lokasi Silang</strong>.
+                    {unclaimed.length} slot masih terbuka — tuntut melalui <strong>Tuntut Lokasi</strong> di bar atas.
                   </p>
                 )}
               </div>

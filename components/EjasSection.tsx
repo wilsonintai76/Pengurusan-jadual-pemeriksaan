@@ -227,21 +227,24 @@ export default function EjasSection({
             <span>Tugasan Saya ({myTasksCount})</span>
           </button>
 
-          <button
-            onClick={onOpenClaimModal}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-800 hover:bg-teal-700 text-white transition flex items-center gap-1.5 shadow-xs"
-          >
-            <Crosshair className="w-3.5 h-3.5" />
-            <span>Pilih Lokasi</span>
-          </button>
+          {/* Pada desktop, butang ini sudah ada di TopHeader — papar di sini hanya untuk skrin kecil. */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <button
+              onClick={onOpenClaimModal}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-800 hover:bg-teal-700 text-white transition flex items-center gap-1.5 shadow-xs"
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              <span>Tuntut Lokasi</span>
+            </button>
 
-          <button
-            onClick={onOpenAddSchedule}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition flex items-center gap-1.5 shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5 text-amber-400" />
-            <span>Daftar Jadual</span>
-          </button>
+            <button
+              onClick={onOpenAddSchedule}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition flex items-center gap-1.5 shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5 text-amber-400" />
+              <span>Daftar Jadual</span>
+            </button>
+          </div>
         </div>
       </div>
 

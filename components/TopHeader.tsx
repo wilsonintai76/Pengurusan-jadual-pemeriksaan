@@ -16,6 +16,8 @@ import { UserSession } from '@/lib/types';
 interface TopHeaderProps {
   currentUser: UserSession | null;
   activeTab: string;
+  /** Tahun sesi aktif daripada tetapan. */
+  tahunSesi?: string;
   onSync: () => void;
   onOpenClaimModal?: () => void;
   onOpenAddSchedule?: () => void;
@@ -65,6 +67,7 @@ const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
 export default function TopHeader({
   currentUser,
   activeTab,
+  tahunSesi,
   onSync,
   onOpenClaimModal,
   onOpenAddSchedule,
@@ -158,7 +161,7 @@ export default function TopHeader({
           
           <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
             <Calendar className="w-3.5 h-3.5 text-slate-500" />
-            <span>Sesi: <strong className="text-slate-900 font-mono">2026</strong></span>
+            <span>Sesi: <strong className="text-slate-900 font-mono">{tahunSesi || new Date().getFullYear()}</strong></span>
           </div>
 
           {activeTab === 'ejas' && onOpenAddSchedule && (

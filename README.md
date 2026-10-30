@@ -424,7 +424,7 @@ Tab **Kitaran Pemeriksaan** (`components/KitaranSection.tsx`) mengurus kitaran d
 2. **Jana Kolam** — 2 slot (P1/P2) bagi setiap jadual yang bertindih dengan tempoh kitaran. Satu pasangan
    slot per lokasi: dua jadual bagi ruang yang sama dalam kitaran yang sama berkongsi slot (indeks unik
    `ux_assign_slot`).
-3. **Tuntutan** — pegawai bertauliah menuntut slot melalui *Tuntut Lokasi Silang*; kejayaan menyegerakkan
+3. **Tuntutan** — pegawai bertauliah menuntut slot melalui butang *Tuntut Lokasi* di bar atas; kejayaan menyegerakkan
    `inspector_id`, `status = DITUNTUT`, `claimed_at`, `schedule_id` ke kolam kitaran aktif.
 4. **Mulakan** — mengunci snapshot (termasuk pasangan timbal balik bagi mod `TIMBAL_BALIK`).
 5. **Tugas Semula** — pentadbir memilih pegawai layak + sebab; rekod disimpan ke
