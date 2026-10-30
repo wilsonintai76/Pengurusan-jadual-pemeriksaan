@@ -26,6 +26,7 @@ import { useCrossPairs } from '@/lib/useReferenceData';
 import { dataApi } from '@/lib/dataApi';
 import { assetCsvFileName, buildAssetCsv, downloadCsv } from '@/lib/assetCsv';
 import { formatJulatTarikhMY, formatTarikhMY } from '@/lib/tarikh';
+import { adaTugasan, kiraTugasanSaya } from '@/lib/tugasanSaya';
 
 interface EjasSectionProps {
   schedules: InspectionSchedule[];
@@ -99,24 +100,13 @@ export default function EjasSection({
   const myDept = currentUser?.dept || 'JTMK';
   const crossPartner = crossPairs[myDept] || Object.keys(crossPairs)[0] || '';
 
-  // Calculate my inspection count
-  const myTasksCount = schedules.filter((s) => {
-    if (!currentUser) return false;
-    const name = currentUser.name.toLowerCase();
-    const p1 = (s.pemeriksa1 || '').toLowerCase();
-    const p2 = (s.pemeriksa2 || '').toLowerCase();
-    return p1.includes(name) || p2.includes(name);
-  }).length;
+  // Tugasan saya = jadual yang saya periksa ATAU ruang yang saya selia.
+  const tugasanSaya = kiraTugasanSaya(schedules, currentUser);
 
   // Filtered schedules
   const filtered = schedules.filter((item) => {
     // My tasks filter
-    if (filterMyTasksOnly && currentUser) {
-      const name = currentUser.name.toLowerCase();
-      const p1 = (item.pemeriksa1 || '').toLowerCase();
-      const p2 = (item.pemeriksa2 || '').toLowerCase();
-      if (!p1.includes(name) && !p2.includes(name)) return false;
-    }
+    if (filterMyTasksOnly && !adaTugasan(item, currentUser)) return false;
 
     // Real-time text search: lokasi, kod jadual, nama pemeriksa 1 & 2
     if (searchQuery.trim()) {
@@ -224,7 +214,23 @@ export default function EjasSection({
             }`}
           >
             <CalendarCheck2 className="w-3.5 h-3.5" />
-            <span>Tugasan Saya ({myTasksCount})</span>
+            <span>Tugasan Saya</span>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                filterMyTasksOnly ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-900'
+              }`}
+              title="Jadual yang saya sebagai Pegawai Pemeriksa"
+            >
+              Pemeriksaan {tugasanSaya.pemeriksaan}
+            </span>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                filterMyTasksOnly ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-900'
+              }`}
+              title="Jadual bagi ruang yang saya selia sebagai Penyelia Lokasi"
+            >
+              Penyeliaan {tugasanSaya.penyeliaan}
+            </span>
           </button>
 
           {/* Pada desktop, butang ini sudah ada di TopHeader — papar di sini hanya untuk skrin kecil. */}

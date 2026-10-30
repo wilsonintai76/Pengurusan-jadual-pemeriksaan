@@ -76,13 +76,17 @@ function safeJson<T>(value: string): T | undefined {
 }
 
 /** "nama||telefon~~nama2||telefon2" → senarai pegawai bertanggungjawab ruang. */
-function parsePegawaiSenarai(value: string | null): Array<{ nama: string; telefon: string }> {
+function parsePegawaiSenarai(value: string | null): Array<{ nama: string; telefon: string; emel: string }> {
   if (!value) return [];
   return value
     .split('~~')
     .map((pair) => {
-      const [nama, telefon] = pair.split('||');
-      return { nama: (nama ?? '').trim(), telefon: (telefon ?? '').trim() };
+      const [nama, telefon, emel] = pair.split('||');
+      return {
+        nama: (nama ?? '').trim(),
+        telefon: (telefon ?? '').trim(),
+        emel: (emel ?? '').trim(),
+      };
     })
     .filter((pegawai) => pegawai.nama.length > 0);
 }

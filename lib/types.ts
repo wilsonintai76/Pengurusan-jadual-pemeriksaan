@@ -78,7 +78,7 @@ export interface InspectionSchedule {
   penjagaTel?: string;
   penjagaEmel?: string;
   /** Semua pegawai bertanggungjawab ruang (selaras Direktori Lokasi). */
-  penjagaSenarai?: Array<{ nama: string; telefon: string }>;
+  penjagaSenarai?: Array<{ nama: string; telefon: string; emel?: string }>;
   status: InspectionStatus;
   catatan?: string;
   kewpa11Doc?: Kewpa11Doc;
