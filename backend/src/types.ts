@@ -47,17 +47,10 @@ export interface LocationRecord {
 export interface ScheduleRecord {
   id: string;
   kod: string;
-  siri?: number;
-  kodRuang?: string;
-  locationId?: string;
-  latitude?: number;
-  longitude?: number;
   jabatan: string;
   lokasi: string;
   kategori: string;
   kuantiti: number;
-  /** Bilangan aset yang sudah ditanda status A–F (sasaran 100%). */
-  asetSelesai?: number;
   tarikhMula: string;
   tarikhTamat: string;
   pemeriksa1: string;
@@ -65,9 +58,6 @@ export interface ScheduleRecord {
   pemeriksa2: string;
   pemeriksa2Email?: string;
   penjaga: string;
-  penjagaTel?: string;
-  penjagaEmel?: string;
-  penjagaSenarai?: Array<{ nama: string; telefon: string; emel?: string }>;
   status: InspectionStatus;
   catatan?: string;
   kewpa11DocKey?: string;

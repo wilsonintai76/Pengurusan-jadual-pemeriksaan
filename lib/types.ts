@@ -65,8 +65,6 @@ export interface InspectionSchedule {
   lokasi: string;
   kategori: AssetCategory;
   kuantiti: number;
-  /** Bilangan aset yang sudah ditanda status A–F (progres sasaran 100%). */
-  asetSelesai?: number;
   /** Kosong ('') = belum ditetapkan oleh Penyelia Lokasi. */
   tarikhMula: string;
   tarikhTamat: string;
@@ -89,24 +87,6 @@ export interface InspectionSchedule {
   laporanPraJkpak?: LaporanPraJkpak;
   createdBy?: string;
   createdAt?: string;
-}
-
-/** Status A–F bagi satu aset ruang (KEW.PA-11 per aset). */
-export interface AssetStatusAset {
-  id: string;
-  label: string;
-  keterangan: string;
-  status: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | null;
-  catatan: string;
-}
-
-export interface ProgresAsetJadual {
-  scheduleId: string;
-  jumlahAset: number;
-  selesai: number;
-  belum: number;
-  pecahan: Record<'A' | 'B' | 'C' | 'D' | 'E' | 'F', number>;
-  aset?: AssetStatusAset[];
 }
 
 export type SystemRole = 

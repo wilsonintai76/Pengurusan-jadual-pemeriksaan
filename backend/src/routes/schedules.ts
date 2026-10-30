@@ -7,7 +7,7 @@ import {
   resolveAssetCategoryId,
   resolveStatusId,
 } from '../lib/db';
-import { getAuthUser, requireAuth, type AppEnv } from '../middleware/auth';
+import { getAuthUser, type AppEnv } from '../middleware/auth';
 import { hasActiveRole, listAssignmentsForOfficer } from '../lib/roles';
 import { canManageDepartment, canManageLocation, loadManageScope } from '../lib/permissions';
 import { windowUntukSiri } from '../lib/takwimSiri';
@@ -18,13 +18,6 @@ import {
   validatePecahanStatus,
   type JustifikasiMap,
 } from '../lib/kewpa11Status';
-import {
-  kiraBelumDitanda,
-  kiraPecahanAset,
-  jumlahPecahanAset,
-  normalisasiStatusAset,
-  pecahanLengkap,
-} from '../lib/statusAsetPeraset';
 import {
   evaluateInspectionEligibility,
   loadSchedulePolicyRow,
@@ -46,6 +39,7 @@ interface ScheduleRow {
   longitude: number | null;
   jabatan: string;
   lokasi: string;
+  kodRuang: string;
   kategori: string;
   kuantiti: number;
   tarikhMula: string;
@@ -71,7 +65,6 @@ interface ScheduleRow {
   justifikasiStatus: string | null;
   syorTindakan: string | null;
   tarikhPengesahan: string | null;
-  asetSelesai: number | null;
 }
 
 function safeJson<T>(value: string): T | undefined {
@@ -113,7 +106,6 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
     lokasi: row.lokasi,
     kategori: row.kategori as ScheduleRecord['kategori'],
     kuantiti: Number(row.kuantiti) || 0,
-    asetSelesai: Number(row.asetSelesai) || 0,
     tarikhMula: row.tarikhMula,
     tarikhTamat: row.tarikhTamat,
     pemeriksa1: row.pemeriksa1,
@@ -527,235 +519,6 @@ export const schedulesRoute = new Hono<AppEnv>()
     }
   })
 
-  // 2b. STATUS PER ASET (KEW.PA-11 per aset) — asas kepada sasaran 100%
-  .get('/:id/assets', requireAuth, async (c) => {
-    const id = c.req.param('id');
-
-    const jadual = await c.env.DB.prepare(
-      `SELECT s.id, s.location_id AS locationId, s.session_id AS sessionId
-         FROM inspection_schedules s
-        WHERE s.id = ?`
-    )
-      .bind(id)
-      .first<{ id: string; locationId: string; sessionId: string }>();
-
-    if (!jadual) {
-      return c.json({ success: false, code: 'SCHEDULE_NOT_FOUND', message: 'Jadual tidak dijumpai.' }, 404);
-    }
-
-    const rows = await c.env.DB.prepare(
-      `SELECT a.id, a.no_siri_pendaftaran AS label, a.keterangan,
-              COALESCE(ias.status, '') AS status, COALESCE(ias.catatan, '') AS catatan
-         FROM assets a
-         LEFT JOIN inspection_asset_status ias
-                ON ias.asset_id = a.id AND ias.session_id = ?
-        WHERE a.location_id = ?
-        ORDER BY a.no_siri_pendaftaran`
-    )
-      .bind(jadual.sessionId, jadual.locationId)
-      .all<{ id: string; label: string; keterangan: string; status: string; catatan: string }>();
-
-    const aset = (rows.results ?? []).map((row) => ({
-      id: row.id,
-      label: row.label,
-      keterangan: row.keterangan,
-      status: normalisasiStatusAset(row.status),
-      catatan: row.catatan || '',
-    }));
-
-    const pecahan = kiraPecahanAset(aset.map((item) => item.status));
-
-    return c.json({
-      success: true,
-      data: {
-        scheduleId: id,
-        jumlahAset: aset.length,
-        selesai: jumlahPecahanAset(pecahan),
-        belum: kiraBelumDitanda(aset.length, pecahan),
-        pecahan,
-        aset,
-      },
-    });
-  })
-
-  .put('/:id/assets', async (c) => {
-    const id = c.req.param('id');
-
-    const jadual = await c.env.DB.prepare(
-      `SELECT s.id, s.location_id AS locationId, s.session_id AS sessionId,
-              s.pemeriksa1_id AS pemeriksa1Id, s.pemeriksa2_id AS pemeriksa2Id,
-              s.department_id AS departmentId
-         FROM inspection_schedules s
-        WHERE s.id = ?`
-    )
-      .bind(id)
-      .first<{
-        id: string;
-        locationId: string;
-        sessionId: string;
-        pemeriksa1Id: string | null;
-        pemeriksa2Id: string | null;
-        departmentId: string;
-      }>();
-
-    if (!jadual) {
-      return c.json({ success: false, code: 'SCHEDULE_NOT_FOUND', message: 'Jadual tidak dijumpai.' }, 404);
-    }
-
-    const auth = getAuthUser(c);
-    const isAdmin = auth ? await hasActiveRole(c.env.DB, auth.id, 'PENTADBIR_SISTEM') : false;
-    const isAssignedInspector =
-      Boolean(auth) && (jadual.pemeriksa1Id === auth?.id || jadual.pemeriksa2Id === auth?.id);
-
-    if (!isAdmin && !(auth && isAssignedInspector)) {
-      await recordAudit(c.env.DB, {
-        actorId: auth?.id ?? null,
-        actorName: auth?.emel ?? 'tidak-dikenali',
-        actedAsRole: auth?.role ?? 'Tiada',
-        action: 'schedule:asset_status',
-        departmentId: jadual.departmentId,
-        decision: 'DENY',
-        policyId: 'POL_INSPECTION_TASK_ASSIGNMENT',
-        resourceId: id,
-        notes: 'Pegawai bukan pemeriksa yang ditugaskan bagi jadual ini.',
-        reason: 'NOT_ASSIGNED_INSPECTOR',
-      });
-
-      return c.json(
-        {
-          success: false,
-          code: 'NOT_ASSIGNED_INSPECTOR',
-          message:
-            'Hanya pemeriksa yang ditugaskan bagi jadual ini boleh menanda status aset (atau Pentadbir Sistem).',
-        },
-        403
-      );
-    }
-
-    const body = await c.req
-      .json<{ aset?: Array<{ assetId?: string; status?: string | null; catatan?: string }> }>()
-      .catch(() => null);
-
-    if (!Array.isArray(body?.aset)) {
-      return c.json(
-        { success: false, code: 'INVALID_BODY', message: 'Medan `aset` diperlukan.' },
-        400
-      );
-    }
-
-    const asetRuang = await c.env.DB.prepare(
-      'SELECT id FROM assets WHERE location_id = ?'
-    )
-      .bind(jadual.locationId)
-      .all<{ id: string }>();
-    const sah = new Set((asetRuang.results ?? []).map((row) => row.id));
-
-    const pernyataan: D1PreparedStatement[] = [];
-    const tidakSah: string[] = [];
-
-    for (const item of body.aset) {
-      const assetId = String(item?.assetId ?? '').trim();
-      if (!assetId || !sah.has(assetId)) {
-        tidakSah.push(assetId);
-        continue;
-      }
-
-      const statusMentah = item?.status;
-      const status =
-        statusMentah === null || statusMentah === undefined || String(statusMentah).trim() === ''
-          ? null
-          : normalisasiStatusAset(statusMentah);
-
-      if (statusMentah && String(statusMentah).trim() !== '' && !status) {
-        tidakSah.push(`${assetId}:${statusMentah}`);
-        continue;
-      }
-
-      if (!status) {
-        pernyataan.push(
-          c.env.DB.prepare(
-            'DELETE FROM inspection_asset_status WHERE session_id = ? AND asset_id = ?'
-          ).bind(jadual.sessionId, assetId)
-        );
-        continue;
-      }
-
-      pernyataan.push(
-        c.env.DB.prepare(
-          `INSERT INTO inspection_asset_status
-             (id, session_id, schedule_id, asset_id, status, catatan, updated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(session_id, asset_id) DO UPDATE SET
-             status = excluded.status,
-             catatan = excluded.catatan,
-             schedule_id = excluded.schedule_id,
-             updated_by = excluded.updated_by,
-             updated_at = datetime('now')`
-        ).bind(
-          `IAS-${crypto.randomUUID()}`,
-          jadual.sessionId,
-          id,
-          assetId,
-          status,
-          String(item?.catatan ?? '').trim() || null,
-          auth?.emel ?? null
-        )
-      );
-    }
-
-    if (tidakSah.length > 0) {
-      return c.json(
-        {
-          success: false,
-          code: 'INVALID_ASSET',
-          message: `Status aset tidak sah atau aset bukan milik ruang ini (${tidakSah.length} baris).`,
-          data: { tidakSah: tidakSah.slice(0, 10) },
-        },
-        400
-      );
-    }
-
-    for (let i = 0; i < pernyataan.length; i += 40) {
-      await c.env.DB.batch(pernyataan.slice(i, i + 40));
-    }
-
-    const semua = await c.env.DB.prepare(
-      `SELECT ias.status
-         FROM inspection_asset_status ias
-         JOIN assets a ON a.id = ias.asset_id
-        WHERE ias.session_id = ? AND a.location_id = ?`
-    )
-      .bind(jadual.sessionId, jadual.locationId)
-      .all<{ status: string }>();
-
-    const jumlahAset = sah.size;
-    const pecahan = kiraPecahanAset((semua.results ?? []).map((row) => row.status));
-
-    await recordAudit(c.env.DB, {
-      actorId: auth?.id ?? null,
-      actorName: auth?.emel ?? 'sistem',
-      actedAsRole: auth?.role ?? 'Pentadbir Sistem',
-      action: 'schedule:asset_status',
-      departmentId: jadual.departmentId,
-      decision: 'PERMIT',
-      policyId: 'POL_INSPECTION_TASK_ASSIGNMENT',
-      resourceId: id,
-      notes: `Status aset dikemas kini: ${jumlahPecahanAset(pecahan)}/${jumlahAset} ditanda.`,
-    });
-
-    return c.json({
-      success: true,
-      message: `${jumlahPecahanAset(pecahan)}/${jumlahAset} aset ditanda.`,
-      data: {
-        scheduleId: id,
-        jumlahAset,
-        selesai: jumlahPecahanAset(pecahan),
-        belum: kiraBelumDitanda(jumlahAset, pecahan),
-        pecahan,
-      },
-    });
-  })
-
   // 3. UPDATE SCHEDULE STATUS / INSPECTORS / REPORT
   .put('/:id', async (c) => {
     const id = c.req.param('id');
@@ -765,7 +528,7 @@ export const schedulesRoute = new Hono<AppEnv>()
 
       const current = await c.env.DB.prepare(
         `SELECT s.id, s.siri, s.department_id, s.location_id, s.tarikh_mula, s.tarikh_tamat,
-                s.pemeriksa1_id, s.pemeriksa2_id, s.session_id AS sessionId, ss.tahun AS sessionTahun
+                s.pemeriksa1_id, s.pemeriksa2_id, ss.tahun AS sessionTahun
            FROM inspection_schedules s
            JOIN inspection_sessions ss ON ss.id = s.session_id
           WHERE s.id = ?`
@@ -780,7 +543,6 @@ export const schedulesRoute = new Hono<AppEnv>()
           tarikh_tamat: string | null;
           pemeriksa1_id: string | null;
           pemeriksa2_id: string | null;
-          sessionId: string;
           sessionTahun: number;
         }>();
 
@@ -1004,46 +766,14 @@ export const schedulesRoute = new Hono<AppEnv>()
       if (body.laporanPraJkpak) {
         const report = body.laporanPraJkpak;
 
-        // Bilangan aset ruang (KEW.PA-7) menentukan sasaran 100%.
+        // Bilangan aset ruang (KEW.PA-7) menentukan "Sedang Digunakan" (A) sebagai baki.
         const assetCount = await c.env.DB.prepare(
           'SELECT COUNT(*) AS total FROM assets WHERE location_id = ?'
         )
           .bind(current.location_id)
           .first<{ total: number }>();
 
-        const jumlahAset = Number(assetCount?.total) || 0;
-
-        // Status per aset ialah sumber kebenaran: jumlah A–F dikira daripadanya.
-        const statusAset = await c.env.DB.prepare(
-          `SELECT ias.status
-             FROM inspection_asset_status ias
-             JOIN assets a ON a.id = ias.asset_id
-            WHERE ias.session_id = ? AND a.location_id = ?`
-        )
-          .bind(current.sessionId, current.location_id)
-          .all<{ status: string }>();
-
-        const kiraanAset = kiraPecahanAset((statusAset.results ?? []).map((row) => row.status));
-        const gunaPerAset = jumlahPecahanAset(kiraanAset) > 0;
-
-        if (gunaPerAset && !pecahanLengkap(jumlahAset, kiraanAset)) {
-          return c.json(
-            {
-              success: false,
-              code: 'ASSET_STATUS_INCOMPLETE',
-              message: `Masih ada ${kiraBelumDitanda(jumlahAset, kiraanAset)} daripada ${jumlahAset} aset belum ditanda status A–F. Lengkapkan Status per Aset sebelum menyimpan KEW.PA-11.`,
-              data: {
-                jumlahAset,
-                selesai: jumlahPecahanAset(kiraanAset),
-                belum: kiraBelumDitanda(jumlahAset, kiraanAset),
-                pecahan: kiraanAset,
-              },
-            },
-            400
-          );
-        }
-
-        const pecahan = gunaPerAset ? kiraanAset : normalizePecahan(report.pecahan, jumlahAset);
+        const pecahan = normalizePecahan(report.pecahan, Number(assetCount?.total) || 0);
         const justifikasi = (report.justifikasi ?? {}) as JustifikasiMap;
 
         const ralat = validatePecahanStatus(pecahan);

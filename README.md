@@ -475,32 +475,8 @@ Pecahan penuh disimpan sebagai JSON dalam `inspection_reports.pecahan_status` / 
 (migrasi `backend/migrations/2026-10-30-kewpa11-pecahan.sql`), manakala lajur warisan untuk kompilasi
 Pra-JKPAK dipetakan: `baik = A + E`, `rosak = C + D`, `usang = B`, `hilang = F`.
 
-## Status per Aset & Sasaran 100% (KEW.PA-11)
-
-Senarai aset ruang datang daripada **KEW.PA-7** (`assets`). Pemeriksa menanda status **A–F bagi setiap
-aset**, dan jumlah pecahan KEW.PA-11 **dikira automatik** daripada tanda tersebut — tiada aset boleh
-terlepas tanpa disedari dan tiada keperluan memuat naik senarai aset daripada SPA lain.
-
-| Perkara | Peraturan |
-|---|---|
-| Sumber senarai aset | `assets` per ruang (daripada muat naik KEW.PA-7 di Direktori Lokasi) |
-| Tanda status | Jadual `inspection_asset_status` — satu baris per aset per sesi (`UNIQUE(session_id, asset_id)`) |
-| Jumlah A–F | Dikira daripada tanda; medan manual diabaikan apabila sudah ada tanda |
-| Sasaran 100% | `GET /api/schedules/:id/assets` memulangkan `jumlahAset`, `selesai`, `belum`, `pecahan` |
-| Simpan KEW.PA-11 | Disekat `400 ASSET_STATUS_INCOMPLETE` selagi ada aset belum ditanda |
-| Progres | `v_schedules_full.asetSelesai` → lajur **Belum Periksa** dalam Direktori Lokasi dan label `94/94 aset` pada butang KEW.PA-11 |
-
-### Endpoint
-
-| Method | Laluan | Nota |
-|---|---|---|
-| `GET` | `/api/schedules/:id/assets` | Senarai aset ruang + status + pecahan (semua pengguna log masuk) |
-| `PUT` | `/api/schedules/:id/assets` | body `{ aset: [{ assetId, status, catatan? }] }`; `status: null` membuang tanda; hanya pemeriksa ditugaskan atau Pentadbir Sistem |
-
-Logik pengiraan di [`backend/src/lib/statusAsetPeraset.ts`](backend/src/lib/statusAsetPeraset.ts) (diuji);
-panel UI di [`components/modals/StatusPerAsetPanel.tsx`](components/modals/StatusPerAsetPanel.tsx)
-(dipasang dalam modal KEW.PA-11, termasuk butang **Baki → A** untuk menanda aset selebihnya).
 ## Pemisahan Tugas & Notifikasi Luput
+
 ### Pengesahan dapatan (separation of duties)
 
 `POST /api/schedules/:id/verify` mengesahkan dapatan pemeriksaan dan menyimpan `disahkan_oleh_id` +

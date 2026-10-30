@@ -212,27 +212,6 @@ CREATE TABLE IF NOT EXISTS inspection_reports (
   FOREIGN KEY (disahkan_oleh_id) REFERENCES officers(id)
 );
 
--- Status A–F bagi setiap aset ruang (KEW.PA-11 per aset). Satu baris per aset
--- per sesi; jumlah A–F dalam laporan dikira daripada jadual ini.
-CREATE TABLE IF NOT EXISTS inspection_asset_status (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL,
-  schedule_id TEXT NOT NULL,
-  asset_id TEXT NOT NULL,
-  status TEXT NOT NULL,                        -- A | B | C | D | E | F
-  catatan TEXT,
-  updated_by TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now')),
-  UNIQUE (session_id, asset_id),
-  FOREIGN KEY (session_id) REFERENCES inspection_sessions(id) ON DELETE CASCADE,
-  FOREIGN KEY (schedule_id) REFERENCES inspection_schedules(id) ON DELETE CASCADE,
-  FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_ias_schedule ON inspection_asset_status(schedule_id);
-CREATE INDEX IF NOT EXISTS idx_ias_asset ON inspection_asset_status(asset_id);
-
 -- --------------------------------------------------------------------
 -- 8. LOG AUDIT PBAC & DOKUMEN R2 CLOUDFLARE
 -- --------------------------------------------------------------------
@@ -794,14 +773,7 @@ SELECT
   r.pecahan_status AS pecahanStatus,
   r.justifikasi_status AS justifikasiStatus,
   r.syor_tindakan AS syorTindakan,
-  r.tarikh_pengesahan AS tarikhPengesahan,
-  -- Bilangan aset yang sudah ditanda status A–F (KEW.PA-11 per aset).
-  (
-    SELECT COUNT(*) FROM inspection_asset_status ias
-     WHERE ias.session_id = s.session_id AND ias.asset_id IN (
-       SELECT a.id FROM assets a WHERE a.location_id = s.location_id
-     )
-  ) AS asetSelesai
+  r.tarikh_pengesahan AS tarikhPengesahan
 FROM inspection_schedules s
 JOIN locations loc ON loc.id = s.location_id
 -- Penyelia lokasi + telefon diambil daripada pandangan direktori lokasi (satu sumber).
