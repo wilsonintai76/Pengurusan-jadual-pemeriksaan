@@ -51,6 +51,7 @@ interface ScheduleRow {
   penjaga: string;
   penjagaTel: string | null;
   penjagaEmel: string | null;
+  penjagaSenarai: string | null;
   status: string;
   catatan: string | null;
   kewpa11DocKey: string | null;
@@ -72,6 +73,18 @@ function safeJson<T>(value: string): T | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** "nama||telefon~~nama2||telefon2" → senarai pegawai bertanggungjawab ruang. */
+function parsePegawaiSenarai(value: string | null): Array<{ nama: string; telefon: string }> {
+  if (!value) return [];
+  return value
+    .split('~~')
+    .map((pair) => {
+      const [nama, telefon] = pair.split('||');
+      return { nama: (nama ?? '').trim(), telefon: (telefon ?? '').trim() };
+    })
+    .filter((pegawai) => pegawai.nama.length > 0);
 }
 
 function mapSchedule(row: ScheduleRow): ScheduleRecord {
@@ -98,6 +111,7 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
     penjaga: row.penjaga,
     penjagaTel: row.penjagaTel ?? '',
     penjagaEmel: row.penjagaEmel ?? '',
+    penjagaSenarai: parsePegawaiSenarai(row.penjagaSenarai),
     status: row.status as ScheduleRecord['status'],
     catatan: row.catatan ?? undefined,
     kewpa11DocKey: row.kewpa11DocKey ?? undefined,

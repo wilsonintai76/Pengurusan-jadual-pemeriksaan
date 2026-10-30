@@ -493,15 +493,20 @@ export default function EjasSection({
                           </span>
                         </div>
                         <div className="mt-1 leading-tight">
-                          <span className="block text-[10px] text-slate-500">
-                            Penyelia:{' '}
-                            <span className="font-medium text-slate-700">
-                              {item.penjaga || 'Belum diisi'}
+                          {(item.penjagaSenarai && item.penjagaSenarai.length > 0
+                            ? item.penjagaSenarai
+                            : [{ nama: item.penjaga || 'Belum diisi', telefon: item.penjagaTel || '' }]
+                          ).map((pegawai) => (
+                            <span key={pegawai.nama} className="block">
+                              <span className="block text-[10px] text-slate-500">
+                                Penyelia:{' '}
+                                <span className="font-medium text-slate-700">{pegawai.nama}</span>
+                              </span>
+                              <span className="block text-[10px] font-mono text-slate-500">
+                                {pegawai.telefon || 'Tiada no. telefon'}
+                              </span>
                             </span>
-                          </span>
-                          <span className="block text-[10px] font-mono text-slate-500">
-                            {item.penjagaTel || 'Tiada no. telefon'}
-                          </span>
+                          ))}
                           {item.latitude && item.longitude ? (
                             <a
                               href={`https://www.google.com/maps?q=${item.latitude},${item.longitude}`}

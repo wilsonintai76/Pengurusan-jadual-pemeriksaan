@@ -754,6 +754,13 @@ SELECT
   COALESCE(vl.penjaga, 'Belum Dilantik') AS penjaga,
   COALESCE(vl.penjagaTel, '') AS penjagaTel,
   COALESCE(vl.penjagaEmel, '') AS penjagaEmel,
+  -- Semua pegawai bertanggungjawab ruang (selaras Direktori Lokasi): "nama||telefon" dipisah "~~".
+  (
+    SELECT GROUP_CONCAT(o.nama || '||' || COALESCE(o.telefon, ''), '~~')
+      FROM location_custodians lc
+      JOIN officers o ON o.id = lc.officer_id
+     WHERE lc.location_id = s.location_id
+  ) AS penjagaSenarai,
   st.nama AS status,
   s.catatan,
   s.kewpa11_r2_key AS kewpa11DocKey,

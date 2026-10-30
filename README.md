@@ -270,6 +270,9 @@ Paparan senarai jadual turut membantu pemeriksa:
 
 - **GPS lokasi** — koordinat ruang (daripada Direktori Lokasi) dipaparkan di bawah nama penyelia dan
   boleh diklik untuk membuka Google Maps; "GPS belum ditetapkan" jika ruang tiada koordinat.
+- **Senarai pegawai bertanggungjawab** — semua pegawai dalam `location_custodians` ruang itu dipaparkan
+  bertindan (nama + telefon) selaras Direktori Lokasi; jika tiada custodian, Penyelia Lokasi daripada
+  lantikan `PENYELIA_LOKASI` digunakan sebagai sandaran.
 - **CSV Aset** di lajur *Kategori & Kuantiti* — memuat turun senarai aset ruang
   (`Bil, No. Siri Pendaftaran, Keterangan Aset`) daripada `GET /api/locations/:id/assets`, supaya
   pemeriksa boleh memilih aset untuk **Daftar Pemeriksaan** tanpa membuka Direktori Lokasi.
