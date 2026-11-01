@@ -8,6 +8,7 @@ import {
   type PlanResult,
   type TargetLocation,
   type UnitStat,
+  type ZoneHints,
 } from './pairing';
 import { isActiveOn, listAssignmentsForOfficer, type AssignmentRow } from './roles';
 import type { CycleRow } from './cycles';
@@ -124,7 +125,42 @@ export interface PlanInputs {
   units: UnitStat[];
   officers: OfficerRef[];
   targets: TargetLocation[];
+  /** Petunjuk keutamaan gabungan: rakan silang rasmi & bangunan utama unit. */
+  hints: ZoneHints;
 }
+
+/**
+ * Petunjuk gabungan: rakan silang (`departments.cross_partner_id`) dan bangunan
+ * utama setiap unit (bangunan yang paling banyak menempatkan ruang unit itu).
+ */
+export async function loadZoneHints(db: DB): Promise<ZoneHints> {
+  const { results: departments } = await db
+    .prepare('SELECT id, cross_partner_id AS crossPartner FROM departments ORDER BY id ASC')
+    .all<{ id: string; crossPartner: string | null }>();
+
+  const { results: buildings } = await db
+    .prepare(
+      `SELECT department_id AS unitId, building_id AS buildingId, COUNT(*) AS bilangan
+         FROM locations
+        WHERE building_id IS NOT NULL
+        GROUP BY department_id, building_id
+        ORDER BY department_id ASC, bilangan DESC, building_id ASC`
+    )
+    .all<{ unitId: string; buildingId: string; bilangan: number }>();
+
+  const crossPartnerByUnit: Record<string, string> = {};
+  (departments ?? []).forEach((row) => {
+    if (row.crossPartner) crossPartnerByUnit[row.id] = row.crossPartner;
+  });
+
+  const buildingByUnit: Record<string, string> = {};
+  (buildings ?? []).forEach((row) => {
+    if (!buildingByUnit[row.unitId]) buildingByUnit[row.unitId] = row.buildingId;
+  });
+
+  return { crossPartnerByUnit, buildingByUnit };
+}
+
 
 /**
  * Memuatkan unit (aset + pemeriksa aktif), senarai pegawai, dan lokasi sasaran
@@ -209,7 +245,7 @@ export async function loadPlanInputs(db: DB, cycle: CycleRow): Promise<PlanInput
     assetCount: Number(target.assetCount) || 0,
   }));
 
-  return { units: unitStats, officers: officers ?? [], targets: targetList };
+  return { units: unitStats, officers: officers ?? [], targets: targetList, hints: await loadZoneHints(db) };
 }
 
 /** Indeks konflik untuk semakan peringkat kumpulan (O(1) setiap lokasi). */
@@ -297,20 +333,27 @@ export interface PlanPreview extends PlanResult {
 /** Jana pratonton pelan (tiada penulisan). */
 export async function previewPlan(db: DB, cycle: CycleRow): Promise<PlanPreview> {
   const params = await getCycleParams(db, cycle.id);
-  const { units, officers, targets } = await loadPlanInputs(db, cycle);
+  const { units, officers, targets, hints } = await loadPlanInputs(db, cycle);
   const index = await buildConflictIndex(db, cycle);
 
-  const plan = buildPlan(units, officers, targets, params, (group, target) => {
-    const members = group.memberIds;
-    if (members.length === 0) return false;
-    return members.every((member) => {
-      if (index.supervisorsByLocation.get(target.locationId)?.has(member)) return false;
-      if (index.supervisorsByDepartment.get(target.unitId)?.has(member)) return false;
-      if (index.assetOfficersByDepartment.get(target.unitId)?.has(member)) return false;
-      if (index.custodiansByLocation.get(target.locationId)?.has(member)) return false;
-      return true;
-    });
-  });
+  const plan = buildPlan(
+    units,
+    officers,
+    targets,
+    params,
+    (group, target) => {
+      const members = group.memberIds;
+      if (members.length === 0) return false;
+      return members.every((member) => {
+        if (index.supervisorsByLocation.get(target.locationId)?.has(member)) return false;
+        if (index.supervisorsByDepartment.get(target.unitId)?.has(member)) return false;
+        if (index.assetOfficersByDepartment.get(target.unitId)?.has(member)) return false;
+        if (index.custodiansByLocation.get(target.locationId)?.has(member)) return false;
+        return true;
+      });
+    },
+    hints
+  );
 
   return {
     ...plan,

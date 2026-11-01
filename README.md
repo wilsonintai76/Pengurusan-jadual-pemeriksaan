@@ -519,25 +519,39 @@ Penolakan direkod sebagai `DENY` dalam jejak audit dengan `POL_SEPARATION_OF_DUT
 Skrin **Peranan & Lantikan** memaparkan sepanduk notifikasi belum dibaca dengan butang imbasan semula dan
 tanda dibaca.
 
-## Penjana Mod Pemeriksaan (Pairing Unit + Agihan LPT)
+## Penjana Mod Pemeriksaan (Zon + Pairing + Agihan LPT)
 
-Mod pemeriksaan **dikira per pasangan unit**, bukan ditetapkan untuk seluruh kitaran. `inspection_cycles.mode`
+Mod pemeriksaan **dikira per zon**, bukan ditetapkan untuk seluruh kitaran. `inspection_cycles.mode`
 kekal sebagai nilai lalai/fallback. Logik tulen berada dalam
 [backend/src/lib/pairing.ts](backend/src/lib/pairing.ts) (tiada I/O, tiada `Date.now()`, tiada rawak) dengan
-23 ujian unit dalam `pairing.test.ts`.
+38 ujian unit dalam `pairing.test.ts`.
 
-### Formula
+### Dua faktor
 
-1. **Kumpulan** — `G_u = floor(P_u / 2)`; unit ganjil mengikut polisi `SIMPANAN` (ahli simpanan) atau `TIGA`.
-   Unit dengan `G_u = 0` terus ke sehala.
-2. **Ujian keseimbangan** — `W(u→v) = A_v / G_u`, lulus jika kedua-dua arah `≤ Q × 1.25` **dan**
-   `|W(u→v) − W(v→u)| / max(W) ≤ τ`.
-3. **Pasangan** — unit disusun mengikut aset menurun, jiran bersebelahan (1-2, 3-4, …); unit baki jatuh sehala.
+| Ukuran | Formula | Maksud |
+|---|---|---|
+| Aset unit | `A_u` | jumlah aset KEW.PA-7 semua ruang unit |
+| Kumpulan | `G_u = floor(P_u / 2)` | P = pemeriksa aktif (lantikan `PEMERIKSA`); baki ikut polisi `SIMPANAN`/`TIGA` |
+| Beban per kumpulan | `r_u = A_u / G_u` | aset yang perlu diperiksa satu kumpulan (2 pegawai) |
+| Beban arah | `W(u→v) = A_v / G_u` | kumpulan u memeriksa aset v |
+
+Sasaran **Q = 375** aset/kumpulan dengan **τ = 15%**, jadi jalur sasaran **318.75–431.25** dan had keras
+**468.75** (Q × 1.25).
+
+### Aliran
+
+1. **Bentuk zon** — unit dengan `r` dalam jalur dipasangkan timbal balik; unit melebihi jalur menjadi zon
+   sendiri (perlu bantuan); unit di bawah jalur dan unit tanpa pemeriksa **digabung** ke zon yang sesuai
+   (keutamaan: rakan silang → bangunan sama → beban). Pasangan timbal balik tidak pernah dipecahkan.
+2. **Ujian keseimbangan dua hala** — lulus hanya jika `G>0` kedua-dua pihak, kedua-dua `r` dalam jalur,
+   `W` kedua-dua arah ≤ had, dan `|W(u→v) − W(v→u)| / max(W) ≤ τ`.
+3. **Kumpulan** — pasangan dalam unit sendiri dahulu; **baki unit berbeza dalam zon gabungan dipasangkan
+   bersama** (gabungan merentas jabatan).
 4. **Agihan LPT** — lokasi terbesar dahulu kepada kumpulan layak dengan beban terendah; lokasi melebihi
-   `1.5 × Q` dipecah antara beberapa kumpulan. Konflik disemak **peringkat kumpulan** (semua ahli mesti bebas:
-   penyelia lokasi/jabatan, PPA jabatan, penjaga ruang).
-5. **Sehala** — pool semua kumpulan tanpa pasangan; kumpulan dari unit lain diutamakan apabila beban sama.
-
+   `1.5 × Q` dipecah. Konflik disemak **peringkat kumpulan** (penyelia lokasi/jabatan, PPA jabatan, penjaga ruang).
+   Timbal balik = kolam **tertutup** (kumpulan rakan sahaja); sehala = kolam **terbuka** (unit lain diutamakan).
+5. **Amaran** — beban zon di luar jalur, kekurangan kumpulan (`ΣA > ΣG × had`), kumpulan melebihi had,
+   lokasi tidak teragih.
 ### Endpoint
 
 | Laluan | Kegunaan |

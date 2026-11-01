@@ -324,8 +324,24 @@ export interface CyclePlan {
     coverage: number;
   };
   suggestedQuota: number;
+  /** Zon pemeriksaan: unit digabung, beban per kumpulan, mod & sebab. */
+  zones?: PlanZoneRow[];
+  /** Amaran beban / liputan / kekurangan kumpulan. */
+  warnings?: string[];
   planVersion: number;
   activeInspectors: number;
+}
+
+export interface PlanZoneRow {
+  id: string;
+  unitIds: string[];
+  assetCount: number;
+  inspectorCount: number;
+  groupCount: number;
+  loadPerGroup: number;
+  kind: 'PASANGAN' | 'GABUNGAN' | 'TUNGGAL' | 'TANPA_PEMERIKSA';
+  mode: 'TIMBAL_BALIK' | 'SEHALA';
+  note: string;
 }
 
 export interface LockPlanResult {

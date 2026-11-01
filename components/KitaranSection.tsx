@@ -214,8 +214,8 @@ export default function KitaranSection({
 
   const [plan, setPlan] = useState<CyclePlan | null>(null);
   const [planParams, setPlanParams] = useState({
-    quota: 120,
-    tolerance: 0.2,
+    quota: 375,
+    tolerance: 0.15,
     overload: 1.25,
     split: 1.5,
     oddPolicy: 'SIMPANAN' as OddUnitPolicy,
@@ -570,7 +570,8 @@ export default function KitaranSection({
                           Penjana Mod Pemeriksaan
                         </h4>
                         <p className="text-[11px] text-slate-500">
-                          Kumpulan 2 orang per unit → ujian keseimbangan W → pasangan timbal balik/se­hala → agihan LPT.
+                          Kumpulan 2 orang per unit → bentuk zon (gabung unit kecil) → ujian
+                          keseimbangan dua faktor (aset &amp; pemeriksa) → agihan LPT.
                         </p>
                       </div>
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-600">
@@ -723,6 +724,75 @@ export default function KitaranSection({
                           <table className="w-full text-left text-[11px]">
                             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
                               <tr>
+                                <th className="px-3 py-2 font-bold">Zon</th>
+                                <th className="px-3 py-2 font-bold">Unit Ahli</th>
+                                <th className="px-3 py-2 font-bold">Aset</th>
+                                <th className="px-3 py-2 font-bold">Kumpulan</th>
+                                <th className="px-3 py-2 font-bold">Aset / Kumpulan</th>
+                                <th className="px-3 py-2 font-bold">Mod</th>
+                                <th className="px-3 py-2 font-bold">Sebab</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {(plan.zones ?? []).map((zona) => {
+                                const jalurMin = Math.round(
+                                  planParams.quota * (1 - planParams.tolerance)
+                                );
+                                const jalurMax = Math.round(
+                                  planParams.quota * (1 + planParams.tolerance)
+                                );
+                                const luarJalur =
+                                  zona.groupCount > 0 &&
+                                  (zona.loadPerGroup < jalurMin || zona.loadPerGroup > jalurMax);
+                                return (
+                                  <tr key={zona.id}>
+                                    <td className="px-3 py-1.5 font-mono font-semibold text-slate-800">
+                                      {zona.id}
+                                    </td>
+                                    <td className="px-3 py-1.5 font-mono text-slate-700">
+                                      {zona.unitIds.join(' + ')}
+                                      {zona.kind === 'GABUNGAN' && (
+                                        <span className="ml-1 rounded bg-indigo-50 px-1 text-[9px] font-bold text-indigo-700">
+                                          GABUNG
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-1.5 font-mono text-slate-600">
+                                      {zona.assetCount}
+                                    </td>
+                                    <td className="px-3 py-1.5 font-mono font-bold text-slate-900">
+                                      {zona.groupCount}
+                                    </td>
+                                    <td
+                                      className={`px-3 py-1.5 font-mono font-bold ${
+                                        luarJalur ? 'text-amber-700' : 'text-emerald-700'
+                                      }`}
+                                    >
+                                      {zona.loadPerGroup || '—'}
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                                          zona.mode === 'TIMBAL_BALIK'
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                            : 'border-amber-200 bg-amber-50 text-amber-800'
+                                        }`}
+                                      >
+                                        {zona.mode === 'TIMBAL_BALIK' ? 'TIMBAL BALIK' : 'SEHALA'}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 text-slate-600">{zona.note}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-slate-200">
+                          <table className="w-full text-left text-[11px]">
+                            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                              <tr>
                                 <th className="px-3 py-2 font-bold">Pasangan</th>
                                 <th className="px-3 py-2 font-bold">Mod</th>
                                 <th className="px-3 py-2 font-bold">W (A→B / B→A)</th>
@@ -757,6 +827,20 @@ export default function KitaranSection({
                             </tbody>
                           </table>
                         </div>
+
+                        {(plan.warnings ?? []).length > 0 && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                            <strong className="flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              {plan.warnings?.length} amaran beban/liputan
+                            </strong>
+                            <ul className="mt-1 space-y-0.5">
+                              {(plan.warnings ?? []).slice(0, 6).map((amaran) => (
+                                <li key={amaran}>• {amaran}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
 
                         {plan.allocation.unassigned.length > 0 && (
                           <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
