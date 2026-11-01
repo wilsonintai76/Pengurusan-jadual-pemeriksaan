@@ -382,12 +382,28 @@ export interface LockResult {
  * Mengunci pelan: menulis kumpulan, pasangan, target, jadual dan slot.
  * Lokasi yang jadualnya sudah `Selesai` dikekalkan (tidak diagih semula).
  */
+export class PlanBlockedError extends Error {
+  readonly blockers: string[];
+
+  constructor(blockers: string[]) {
+    super(blockers[0] ?? 'Pelan tidak boleh dikunci.');
+    this.name = 'PlanBlockedError';
+    this.blockers = blockers;
+  }
+}
+
 export async function lockPlan(
   db: DB,
   cycle: CycleRow,
   createdById?: string | null
 ): Promise<LockResult> {
   const preview = await previewPlan(db, cycle);
+
+  // Kapasiti tidak mencukupi / had dilanggar / lokasi tidak teragih: tolak sebelum menulis apa-apa.
+  if (preview.blockers.length > 0) {
+    throw new PlanBlockedError(preview.blockers);
+  }
+
   const nextVersion = preview.planVersion + 1;
 
   try {

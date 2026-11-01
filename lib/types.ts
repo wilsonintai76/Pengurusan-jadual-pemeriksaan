@@ -326,8 +326,10 @@ export interface CyclePlan {
   suggestedQuota: number;
   /** Zon pemeriksaan: unit digabung, beban per kumpulan, mod & sebab. */
   zones?: PlanZoneRow[];
-  /** Amaran beban / liputan / kekurangan kumpulan. */
+  /** Amaran beban (maklumat sahaja). */
   warnings?: string[];
+  /** Penghalang: Kunci Pelan ditolak selagi ada. */
+  blockers?: string[];
   planVersion: number;
   activeInspectors: number;
 }

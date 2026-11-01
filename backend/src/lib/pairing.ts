@@ -135,8 +135,10 @@ export interface PlanResult {
   allocation: AllocationResult;
   /** Cadangan kuota seimbang: jumlah aset / jumlah kumpulan (0 jika tiada kumpulan). */
   suggestedQuota: number;
-  /** Amaran yang perlu ditangani penyelaras (beban, liputan, kekurangan kumpulan). */
+  /** Amaran maklumat (cth. beban di bawah sasaran). */
   warnings: string[];
+  /** Penghalang: pelan tidak boleh dikunci selagi ada (kapasiti/had/liputan). */
+  blockers: string[];
 }
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
@@ -818,57 +820,54 @@ export function allocateTargets(
   };
 }
 
-/** Amaran yang perlu ditangani penyelaras sebelum pelan dikunci. */
+/** Amaran (maklumat) dan penghalang (menyekat Kunci Pelan) bagi satu pelan. */
 function binaAmaran(plan: {
   params: PairingParams;
   zones: InspectionZone[];
   groups: InspectorGroup[];
   allocation: AllocationResult;
-}): string[] {
+}): { warnings: string[]; blockers: string[] } {
   const jalur = jalurZon(plan.params);
-  const amaran: string[] = [];
+  const warnings: string[] = [];
+  const blockers: string[] = [];
 
   plan.zones.forEach((zona) => {
     if (zona.groupCount === 0) return;
+    const nama = `${zona.id} (${zona.unitIds.join(' + ')})`;
     if (zona.loadPerGroup > jalur.had) {
-      amaran.push(
-        `${zona.id} (${zona.unitIds.join(' + ')}): ${zona.loadPerGroup} aset/kumpulan melebihi had ${jalur.had}.`
-      );
+      blockers.push(`${nama}: ${zona.loadPerGroup} aset/kumpulan melebihi had ${jalur.had}.`);
     } else if (zona.loadPerGroup < jalur.min) {
-      amaran.push(
-        `${zona.id} (${zona.unitIds.join(' + ')}): hanya ${zona.loadPerGroup} aset/kumpulan - di bawah sasaran ${jalur.min}.`
-      );
-    }
-    if (zona.kind === 'TANPA_PEMERIKSA') {
-      amaran.push(
-        `${zona.id} (${zona.unitIds.join(' + ')}): tiada pemeriksa aktif - aset bergantung pada zon lain.`
-      );
+      warnings.push(`${nama}: hanya ${zona.loadPerGroup} aset/kumpulan - di bawah sasaran ${jalur.min}.`);
     }
   });
 
   const jumlahKumpulan = plan.groups.filter((group) => group.memberIds.length > 0).length;
   const jumlahAset = plan.zones.reduce((sum, zona) => sum + zona.assetCount, 0);
 
-  if (jumlahKumpulan > 0 && jumlahAset > jumlahKumpulan * jalur.had) {
-    const perlu = Math.ceil(jumlahAset / jalur.had) - jumlahKumpulan;
-    amaran.push(
-      `Kekurangan kumpulan: ${jumlahAset} aset memerlukan ${Math.ceil(jumlahAset / jalur.had)} kumpulan pada had ${jalur.had}, hanya ${jumlahKumpulan} tersedia (tambah ${perlu}).`
+  if (jumlahAset > 0 && jumlahKumpulan === 0) {
+    blockers.push(
+      `Tiada kumpulan pemeriksa (perlu sekurang-kurangnya 2 pemeriksa aktif bagi satu kumpulan) untuk ${jumlahAset} aset.`
+    );
+  } else if (jumlahAset > jumlahKumpulan * jalur.had) {
+    const perlu = Math.ceil(jumlahAset / jalur.had);
+    blockers.push(
+      `Kekurangan kumpulan: ${jumlahAset} aset memerlukan ${perlu} kumpulan pada had ${jalur.had}, hanya ${jumlahKumpulan} tersedia (tambah ${perlu - jumlahKumpulan}, iaitu ${(perlu - jumlahKumpulan) * 2} pemeriksa).`
     );
   }
 
   Object.entries(plan.allocation.groupLoad).forEach(([groupId, beban]) => {
     if (beban > jalur.had) {
-      amaran.push(`Kumpulan ${groupId} menerima ${round(beban)} aset - melebihi had ${jalur.had}.`);
+      blockers.push(`Kumpulan ${groupId} menerima ${round(beban)} aset - melebihi had ${jalur.had}.`);
     }
   });
 
   if (plan.allocation.unassigned.length > 0) {
-    amaran.push(
+    blockers.push(
       `${plan.allocation.unassigned.length} lokasi tidak dapat diagihkan (konflik PBAC atau tiada kumpulan layak).`
     );
   }
 
-  return amaran;
+  return { warnings, blockers };
 }
 
 /** Bangunkan pelan penuh (zon -> kumpulan -> mod -> agihan) tanpa menyimpan apa-apa. */
@@ -887,6 +886,7 @@ export function buildPlan(
 
   const totalAssets = units.reduce((sum, unit) => sum + unit.assetCount, 0);
   const totalGroups = groups.filter((group) => group.memberIds.length > 0).length;
+  const { warnings, blockers } = binaAmaran({ params, zones, groups, allocation });
 
   return {
     params,
@@ -905,6 +905,7 @@ export function buildPlan(
     decisions,
     allocation,
     suggestedQuota: totalGroups === 0 ? 0 : Math.round(totalAssets / totalGroups),
-    warnings: binaAmaran({ params, zones, groups, allocation }),
+    warnings,
+    blockers,
   };
 }

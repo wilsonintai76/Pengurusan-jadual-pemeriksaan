@@ -378,17 +378,40 @@ describe('buildPlan', () => {
     expect(plan.groups).toHaveLength(4);
   });
 
-  it('menyertakan zon dan memberi amaran beban rendah', () => {
+  it('menyertakan zon dan memberi amaran beban rendah (bukan penghalang)', () => {
     const units = [unit('JTMK', 150, 2), unit('JMSK', 120, 0)];
     const plan = buildPlan(units, officersFor(units), [], params, alwaysEligible);
     expect(plan.zones.length).toBeGreaterThan(0);
     expect(plan.warnings.some((w) => /di bawah sasaran/.test(w))).toBe(true);
+    expect(plan.blockers).toHaveLength(0);
   });
 
-  it('memberi amaran kekurangan kumpulan apabila aset melebihi kapasiti', () => {
+  it('menghalang apabila aset melebihi kapasiti kumpulan', () => {
     const units = [unit('BESAR', 2000, 2)];
     const plan = buildPlan(units, officersFor(units), [], params, alwaysEligible);
-    expect(plan.warnings.some((w) => /Kekurangan kumpulan/.test(w))).toBe(true);
+    expect(plan.blockers.some((w) => /Kekurangan kumpulan/.test(w))).toBe(true);
+    expect(plan.blockers.some((w) => /melebihi had/.test(w))).toBe(true);
+  });
+
+  it('menghalang apabila tiada kumpulan pemeriksa langsung', () => {
+    const units = [unit('JKM', 229, 1)];
+    const plan = buildPlan(units, officersFor(units), [], params, alwaysEligible);
+    expect(plan.blockers[0]).toMatch(/Tiada kumpulan pemeriksa/);
+  });
+
+  it('menghalang apabila lokasi tidak dapat diagihkan', () => {
+    const units = [unit('JKE', 800, 4), unit('JKM', 780, 4)];
+    const targets = [target('L1', 'JKE', 400)];
+    const plan = buildPlan(units, officersFor(units), targets, params, () => false);
+    expect(plan.blockers.some((w) => /tidak dapat diagihkan/.test(w))).toBe(true);
+  });
+
+  it('tiada penghalang bagi pelan seimbang', () => {
+    const units = [unit('JKA', 800, 4), unit('JKM', 760, 4)];
+    const targets = [target('L1', 'JKA', 800), target('L2', 'JKM', 760)];
+    const plan = buildPlan(units, officersFor(units), targets, params, alwaysEligible);
+    expect(plan.blockers).toHaveLength(0);
+    expect(plan.warnings).toHaveLength(0);
   });
 
   it('mengira liputan terhadap jumlah aset sasaran', () => {

@@ -550,8 +550,11 @@ Sasaran **Q = 375** aset/kumpulan dengan **τ = 15%**, jadi jalur sasaran **318.
 4. **Agihan LPT** — lokasi terbesar dahulu kepada kumpulan layak dengan beban terendah; lokasi melebihi
    `1.5 × Q` dipecah. Konflik disemak **peringkat kumpulan** (penyelia lokasi/jabatan, PPA jabatan, penjaga ruang).
    Timbal balik = kolam **tertutup** (kumpulan rakan sahaja); sehala = kolam **terbuka** (unit lain diutamakan).
-5. **Amaran** — beban zon di luar jalur, kekurangan kumpulan (`ΣA > ΣG × had`), kumpulan melebihi had,
-   lokasi tidak teragih.
+5. **Penghalang & amaran** — pratonton sentiasa boleh dijana. **Penghalang** menyekat Kunci Pelan
+   (`POST /api/cycles/:id/lock` → `422 PLAN_BLOCKED`, direkod audit `DENY`; butang *Kunci Pelan* dilumpuhkan):
+   tiada kumpulan pemeriksa langsung, `ΣA > ΣG × had` (kekurangan kumpulan, dengan bilangan pemeriksa
+   yang perlu ditambah), zon/kumpulan melebihi had **468.75**, dan lokasi tidak dapat diagihkan.
+   **Amaran** (tidak menyekat): beban zon di bawah jalur sasaran.
 ### Endpoint
 
 | Laluan | Kegunaan |

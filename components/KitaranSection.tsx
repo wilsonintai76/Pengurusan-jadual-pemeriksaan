@@ -671,8 +671,13 @@ export default function KitaranSection({
                       <button
                         type="button"
                         onClick={handleLockPlan}
-                        disabled={isWorking || !plan}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        disabled={isWorking || !plan || (plan.blockers ?? []).length > 0}
+                        title={
+                          (plan?.blockers ?? []).length > 0
+                            ? 'Selesaikan penghalang di bawah sebelum mengunci pelan'
+                            : undefined
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Lock className="h-3.5 w-3.5" />
                         Kunci Pelan
@@ -828,11 +833,25 @@ export default function KitaranSection({
                           </table>
                         </div>
 
+                        {(plan.blockers ?? []).length > 0 && (
+                          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
+                            <strong className="flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Pelan tidak boleh dikunci — {plan.blockers?.length} penghalang
+                            </strong>
+                            <ul className="mt-1 space-y-0.5">
+                              {(plan.blockers ?? []).map((halangan) => (
+                                <li key={halangan}>• {halangan}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         {(plan.warnings ?? []).length > 0 && (
                           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
                             <strong className="flex items-center gap-1.5">
                               <AlertTriangle className="h-3.5 w-3.5" />
-                              {plan.warnings?.length} amaran beban/liputan
+                              {plan.warnings?.length} amaran beban
                             </strong>
                             <ul className="mt-1 space-y-0.5">
                               {(plan.warnings ?? []).slice(0, 6).map((amaran) => (

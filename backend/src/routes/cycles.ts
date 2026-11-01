@@ -17,6 +17,7 @@ import { recordAudit } from '../lib/audit';
 import {
   getCycleParams,
   lockPlan,
+  PlanBlockedError,
   previewPlan,
   updateCycleParams,
 } from '../lib/planning';
@@ -150,6 +151,30 @@ export const cyclesRoute = new Hono<AppEnv>()
         data: result,
       });
     } catch (e: any) {
+      if (e instanceof PlanBlockedError) {
+        const auth = getAuthUser(c);
+        await recordAudit(c.env.DB, {
+          actorId: auth?.id ?? null,
+          actorName: auth?.emel ?? 'sistem',
+          actedAsRole: auth?.role ?? 'Pentadbir Sistem',
+          action: 'cycle:lock_plan',
+          departmentId: auth?.dept ?? 'PENTADBIRAN',
+          decision: 'DENY',
+          policyId: 'POL_INSPECTION_CYCLE',
+          resourceId: c.req.param('id'),
+          notes: `Kunci pelan ditolak: ${e.blockers.join(' | ')}`,
+          reason: 'PLAN_BLOCKED',
+        });
+        return c.json(
+          {
+            success: false,
+            code: 'PLAN_BLOCKED',
+            message: `Pelan tidak boleh dikunci: ${e.blockers[0]}`,
+            data: { blockers: e.blockers },
+          },
+          422
+        );
+      }
       return c.json({ success: false, message: 'Ralat mengunci pelan: ' + e.message }, 500);
     }
   })
