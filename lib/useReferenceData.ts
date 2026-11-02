@@ -7,7 +7,12 @@ let departmentsRequest: Promise<DepartmentInfo[]> | null = null;
 /** Unit bukan operasi (cth. SISTEM untuk akaun pentadbir) disembunyikan daripada senarai operasi. */
 const isOperational = (department: DepartmentInfo): boolean => department.isOperational !== 0;
 
-/** Loads the department directory from D1 once per page load. */
+/** Buang cache jabatan selepas jabatan didaftar/diubah/dipadam supaya senarai pilihan sentiasa terkini. */
+export function invalidateDepartments(): void {
+  departmentsRequest = null;
+}
+
+/** Loads the department directory from D1; cached until invalidated (kegagalan tidak dicache). */
 export function loadDepartments(): Promise<DepartmentInfo[]> {
   if (!departmentsRequest) {
     departmentsRequest = dataApi.departments
@@ -15,6 +20,7 @@ export function loadDepartments(): Promise<DepartmentInfo[]> {
       .then((list) => list.filter(isOperational))
       .catch((error) => {
         console.error('Gagal memuatkan senarai jabatan:', error);
+        departmentsRequest = null;
         return [];
       });
   }
@@ -24,8 +30,10 @@ export function loadDepartments(): Promise<DepartmentInfo[]> {
 export function useDepartments(): DepartmentInfo[] {
   const [departments, setDepartments] = useState<DepartmentInfo[]>([]);
 
+  // Muat semula setiap kali komponen dipasang (modal dibuka) supaya jabatan baharu terus muncul.
   useEffect(() => {
     let active = true;
+    invalidateDepartments();
     loadDepartments().then((list) => {
       if (active) setDepartments(list);
     });

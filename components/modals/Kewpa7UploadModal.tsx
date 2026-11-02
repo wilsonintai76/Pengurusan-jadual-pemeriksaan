@@ -82,7 +82,7 @@ export default function Kewpa7UploadModal({
     const groups = departments
       .map((dept) => ({
         id: dept.id,
-        label: `${dept.id} â€” ${dept.name}`,
+        label: `${dept.id} — ${dept.name}`,
         people: officers.filter((officer) => officer.dept === dept.id),
       }))
       .filter((group) => group.people.length > 0);
@@ -406,7 +406,7 @@ export default function Kewpa7UploadModal({
 
       onSaveKewpa7Record(newRecord, newLocation);
 
-      // Kredensial hanya dipaparkan sekali â€” tahan modal terbuka sehingga pentadbir mengesahkan.
+      // Kredensial hanya dipaparkan sekali — tahan modal terbuka sehingga pentadbir mengesahkan.
       if (createdOfficers.length) {
         setIssuedOfficers(createdOfficers);
       } else {
@@ -641,7 +641,7 @@ export default function Kewpa7UploadModal({
                           {dept.id} - {dept.name}
                         </option>
                       ))}
-                      {!departments.length && <option value="">Memuatkanâ€¦</option>}
+                      {!departments.length && <option value="">Memuatkan…</option>}
                     </select>
                   </div>
 
@@ -699,7 +699,7 @@ export default function Kewpa7UploadModal({
 
                   <p className="text-[11px] text-slate-500">
                     Diekstrak daripada blok <strong>(a) Disediakan oleh</strong> dan{' '}
-                    <strong>(b) Disahkan oleh</strong> â€” <strong>(b) Disahkan</strong> dianggap Penyelia Lokasi
+                    <strong>(b) Disahkan oleh</strong> — <strong>(b) Disahkan</strong> dianggap Penyelia Lokasi
                     dan didahulukan. Padam mana-mana nama yang tidak berkaitan sebelum menyimpan. Nama yang
                     tiada dalam <strong>Direktori Pegawai</strong> akan didaftarkan automatik ke direktori.
                   </p>
@@ -727,7 +727,7 @@ export default function Kewpa7UploadModal({
                             onChange={(e) => handleSelectOfficer(idx, e.target.value)}
                             className="flex-1 px-2.5 py-1 text-xs border border-slate-200 rounded focus:border-amber-500 focus:outline-none font-semibold text-slate-800 bg-white"
                           >
-                            <option value="">â€” Pilih Pegawai (boleh kosong) â€”</option>
+                            <option value="">— Pilih Pegawai (boleh kosong) —</option>
                             {officerGroups.map((group) => (
                               <optgroup key={group.id} label={group.label}>
                                 {group.people.map((person) => {
@@ -741,7 +741,7 @@ export default function Kewpa7UploadModal({
                                       disabled={alreadyUsed}
                                     >
                                       {person.name}
-                                      {person.role ? ` â€” ${person.role}` : ''}
+                                      {person.role ? ` — ${person.role}` : ''}
                                       {alreadyUsed ? ' (sudah dipilih)' : ''}
                                     </option>
                                   );
@@ -751,7 +751,7 @@ export default function Kewpa7UploadModal({
                             {isNew && (
                               <optgroup label="Baharu daripada KEW.PA-7">
                                 <option value={officer.id}>
-                                  {officer.nama} â€” akan didaftarkan sebagai pengguna
+                                  {officer.nama} — akan didaftarkan sebagai pengguna
                                 </option>
                               </optgroup>
                             )}
@@ -945,7 +945,7 @@ export default function Kewpa7UploadModal({
 
       </div>
 
-      {/* Kredensial pegawai baharu â€” dipaparkan sekali sahaja */}
+      {/* Kredensial pegawai baharu — dipaparkan sekali sahaja */}
       {issuedOfficers && (
         <div className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
