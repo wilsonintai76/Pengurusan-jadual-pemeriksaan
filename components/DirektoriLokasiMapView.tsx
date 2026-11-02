@@ -285,7 +285,7 @@ export default function DirektoriLokasiMapView({
 
           <div style="font-size: 11px; color: #475569; margin-bottom: 8px; line-height: 1.4;">
             <div>🏢 <strong>${loc.bangunan}</strong> • ${loc.aras}</div>
-            <div>🏷️ Kategori: <strong>${loc.kategoriRuang}</strong> (${loc.jabatan})</div>
+            <div>🏷️ Kod Ruang: <strong>${loc.kodRuang}</strong> (${loc.jabatan})</div>
             <div>📦 Bilangan Aset: <strong>${loc.anggaranAset} unit</strong></div>
             <div style="margin-top: 3px;">👤 Penjaga: <strong>${loc.penjaga}</strong></div>
           </div>

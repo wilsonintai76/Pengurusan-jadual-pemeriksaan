@@ -74,8 +74,7 @@ export default function DirektoriLokasiSection({
   const canEditLocation = (loc: LocationInfo) => canManageLocation(manageScope, loc);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState(initialDeptFilter);
-  const [selectedKategori, setSelectedKategori] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedBangunan, setSelectedBangunan] = useState('');  const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [highlightMapLocationId, setHighlightMapLocationId] = useState<string | undefined>(undefined);
 
@@ -388,12 +387,22 @@ export default function DirektoriLokasiSection({
         loc.bangunan.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchDept = selectedDept ? loc.jabatan === selectedDept : true;
-      const matchKategori = selectedKategori ? loc.kategoriRuang === selectedKategori : true;
+      const matchBangunan = selectedBangunan ? loc.bangunan === selectedBangunan : true;
       const matchStatus = selectedStatus ? loc.statusPemeriksaan === selectedStatus : true;
 
-      return matchSearch && matchDept && matchKategori && matchStatus;
+      return matchSearch && matchDept && matchBangunan && matchStatus;
     });
-  }, [locations, searchTerm, selectedDept, selectedKategori, selectedStatus]);
+  }, [locations, searchTerm, selectedDept, selectedBangunan, selectedStatus]);
+
+  // Senarai bangunan/blok sebenar daripada data KEW.PA-7
+  const senaraiBangunan = useMemo(() => {
+    const set = new Set<string>();
+    locations.forEach((loc) => {
+      const nama = (loc.bangunan || '').trim();
+      if (nama && nama !== '-') set.add(nama);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [locations]);
 
   // Aggregate stats
   const stats = useMemo(() => {
@@ -401,18 +410,21 @@ export default function DirektoriLokasiSection({
     const selesai = locations.filter((l) => l.statusPemeriksaan === 'Selesai').length;
     const sedang = locations.filter((l) => l.statusPemeriksaan === 'Sedang Dijalankan').length;
     const belum = locations.filter((l) => l.statusPemeriksaan === 'Belum Mula').length;
-    const makmal = locations.filter((l) => l.kategoriRuang === 'Makmal Komputer').length;
-    const bengkel = locations.filter((l) => l.kategoriRuang === 'Bengkel Teknikal').length;
+    const berpenjaga = locations.filter((l) => {
+      const nama = (l.penjaga || '').trim();
+      return nama !== '' && nama !== '-';
+    }).length;
+    const tanpaPenjaga = total - berpenjaga;
     const totalAset = locations.reduce((acc, curr) => acc + (curr.anggaranAset || 0), 0);
 
-    return { total, selesai, sedang, belum, makmal, bengkel, totalAset };
+    return { total, selesai, sedang, belum, berpenjaga, tanpaPenjaga, totalAset };
   }, [locations]);
 
   // Export CSV
   const handleExportCSV = () => {
-    let csv = 'Bil,Kod Ruang,Nama Lokasi,Jabatan,Kategori,Bangunan,Aras,Pegawai Penjaga,Jawatan Penjaga,Emel,Telefon,Anggaran Aset,Status Pemeriksaan\n';
+    let csv = 'Bil,Kod Ruang,Nama Lokasi,Jabatan,Bangunan,Aras,Pegawai Penjaga,Jawatan Penjaga,Emel,Telefon,Anggaran Aset,Status Pemeriksaan\n';
     filteredLocations.forEach((loc, idx) => {
-      csv += `${idx + 1},"${loc.kodRuang}","${loc.nama}","${loc.jabatan}","${loc.kategoriRuang}","${loc.bangunan}","${loc.aras}","${loc.penjaga}","${loc.penjagaJawatan || ''}","${loc.penjagaEmel || ''}","${loc.penjagaTel || ''}",${loc.anggaranAset},"${loc.statusPemeriksaan}"\n`;
+      csv += `${idx + 1},"${loc.kodRuang}","${loc.nama}","${loc.jabatan}","${loc.bangunan}","${loc.aras}","${loc.penjaga}","${loc.penjagaJawatan || ''}","${loc.penjagaEmel || ''}","${loc.penjagaTel || ''}",${loc.anggaranAset},"${loc.statusPemeriksaan}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -509,25 +521,29 @@ export default function DirektoriLokasiSection({
             <span className="text-2xl font-extrabold text-slate-900 font-mono">{stats.total}</span>
             <span className="text-xs text-slate-500">ruang</span>
           </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">12 Jabatan / Unit</span>
+          <span className="text-[10px] text-slate-400 mt-1 block">
+            {departments.length} Jabatan / Unit
+          </span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[11px] font-bold text-sky-700 uppercase tracking-wider block">Makmal Digital</span>
+          <span className="text-[11px] font-bold text-sky-700 uppercase tracking-wider block">Penjaga Ruang</span>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-2xl font-extrabold text-sky-700 font-mono">{stats.makmal}</span>
-            <span className="text-xs text-sky-600">makmal</span>
+            <span className="text-2xl font-extrabold text-sky-700 font-mono">{stats.berpenjaga}</span>
+            <span className="text-xs text-sky-600">ruang</span>
           </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">Komputer & Rangkaian</span>
+          <span className="text-[10px] text-slate-400 mt-1 block">
+            {stats.tanpaPenjaga > 0 ? `${stats.tanpaPenjaga} ruang belum ada penjaga` : 'Semua ruang ada penjaga'}
+          </span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">Bengkel Teknikal</span>
+          <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">Bangunan / Blok</span>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-2xl font-extrabold text-indigo-700 font-mono">{stats.bengkel}</span>
-            <span className="text-xs text-indigo-600">bengkel</span>
+            <span className="text-2xl font-extrabold text-indigo-700 font-mono">{senaraiBangunan.length}</span>
+            <span className="text-xs text-indigo-600">blok</span>
           </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">Mekanikal, Awam & Kuasa</span>
+          <span className="text-[10px] text-slate-400 mt-1 block">Mengikut kod KEW.PA-7</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
@@ -547,7 +563,7 @@ export default function DirektoriLokasiSection({
             <span className="text-2xl font-extrabold text-amber-700 font-mono">{stats.sedang}</span>
             <span className="text-xs text-amber-600">ruang</span>
           </div>
-          <span className="text-[10px] text-amber-600 mt-1 block">Proses Fizikal Aktif</span>
+          <span className="text-[10px] text-amber-600 mt-1 block">Belum Mula: {stats.belum} ruang</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
@@ -556,7 +572,7 @@ export default function DirektoriLokasiSection({
             <span className="text-2xl font-extrabold text-purple-700 font-mono">{stats.totalAset}</span>
             <span className="text-xs text-purple-600">unit</span>
           </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">Semua Kategori</span>
+          <span className="text-[10px] text-slate-400 mt-1 block">Terkumpul daripada KEW.PA-7</span>
         </div>
       </div>
 
@@ -592,22 +608,19 @@ export default function DirektoriLokasiSection({
             </select>
           </div>
 
-          {/* Room Category Filter */}
+          {/* Bangunan / Blok Filter */}
           <div className="md:col-span-3">
             <select
-              value={selectedKategori}
-              onChange={(e) => setSelectedKategori(e.target.value)}
+              value={selectedBangunan}
+              onChange={(e) => setSelectedBangunan(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-amber-400 focus:outline-none font-medium"
             >
-              <option value="">Semua Kategori Ruang</option>
-              <option value="Makmal Komputer">Makmal Komputer</option>
-              <option value="Bengkel Teknikal">Bengkel Teknikal</option>
-              <option value="Bilik Kuliah">Bilik Kuliah</option>
-              <option value="Bilik Pelayan">Bilik Pelayan / Server</option>
-              <option value="Stor & Arkib">Stor & Arkib</option>
-              <option value="Studio">Studio Multimedia</option>
-              <option value="Pusat Sumber">Pusat Sumber / Arkib</option>
-              <option value="Pejabat Pentadbiran">Pejabat Pentadbiran</option>
+              <option value="">Semua Bangunan / Blok</option>
+              {senaraiBangunan.map((nama) => (
+                <option key={nama} value={nama}>
+                  {nama}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -628,7 +641,7 @@ export default function DirektoriLokasiSection({
         </div>
 
         {/* Active Filter Tags */}
-        {(searchTerm || selectedDept || selectedKategori || selectedStatus) && (
+        {(searchTerm || selectedDept || selectedBangunan || selectedStatus) && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-[11px] font-semibold text-slate-500">Penapis Aktif:</span>
             {selectedDept && (
@@ -637,10 +650,10 @@ export default function DirektoriLokasiSection({
                 <button onClick={() => setSelectedDept('')} className="hover:text-rose-600"><X className="w-3 h-3" /></button>
               </span>
             )}
-            {selectedKategori && (
+            {selectedBangunan && (
               <span className="bg-sky-50 text-sky-800 px-2 py-0.5 rounded-md text-[11px] flex items-center gap-1 border border-sky-200">
-                Kategori: {selectedKategori}
-                <button onClick={() => setSelectedKategori('')} className="hover:text-rose-600"><X className="w-3 h-3" /></button>
+                Bangunan: {selectedBangunan}
+                <button onClick={() => setSelectedBangunan('')} className="hover:text-rose-600"><X className="w-3 h-3" /></button>
               </span>
             )}
             {selectedStatus && (
@@ -659,7 +672,7 @@ export default function DirektoriLokasiSection({
               onClick={() => {
                 setSearchTerm('');
                 setSelectedDept('');
-                setSelectedKategori('');
+                setSelectedBangunan('');
                 setSelectedStatus('');
               }}
               className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold ml-2 underline"
@@ -1147,7 +1160,7 @@ export default function DirektoriLokasiSection({
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:border-amber-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Kategori ruang dijajarkan automatik daripada nama ruang.
+                    Bangunan &amp; aras diambil daripada kod ruang KEW.PA-7.
                   </span>
                 </div>
               </div>

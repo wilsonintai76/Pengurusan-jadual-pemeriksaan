@@ -1038,10 +1038,14 @@ export default function App() {
               jabatanDiurus={jabatanDiurusPegawai}
               onCreateOfficer={async (input) => {
                 const result = await dataApi.officers.createAccount(input);
-                setUsers((prev) => [result.officer, ...prev]);
+                setUsers((prev) =>
+                  result.existing ? prev : [result.officer, ...prev]
+                );
                 showToast(
-                  `Pegawai ${result.officer.name} didaftarkan. Nama pengguna: ${result.credentials.username}`,
-                  'success'
+                  result.credentials
+                    ? `Pegawai ${result.officer.name} didaftarkan. Nama pengguna: ${result.credentials.username}`
+                    : `${result.officer.name} sudah ada dalam direktori — rekod sedia ada digunakan (tiada pendua).`,
+                  result.credentials ? 'success' : 'info'
                 );
                 return result;
               }}

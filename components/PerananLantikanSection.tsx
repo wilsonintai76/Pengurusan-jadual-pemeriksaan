@@ -35,7 +35,7 @@ interface PerananLantikanSectionProps {
   /** Daftar pengguna baharu (Pentadbir Sistem) — kredensial dijana Worker. */
   onCreateOfficer?: (
     input: NewOfficerInput
-  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials }>;
+  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials | null }>;
   /** Dipanggil selepas lantikan/pengguna berubah (induk memuat semula direktori). */
   onChanged?: () => void;
 }

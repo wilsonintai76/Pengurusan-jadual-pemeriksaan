@@ -81,7 +81,7 @@ export class ApiError extends Error {
 async function apiFetchEnvelope<T>(
   path: string,
   init?: RequestInit
-): Promise<{ data: T; credentials?: IssuedCredentials }> {
+): Promise<{ data: T; credentials?: IssuedCredentials; existing?: boolean }> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -106,7 +106,7 @@ async function apiFetchEnvelope<T>(
     );
   }
 
-  return { data: payload?.data as T, credentials: payload?.credentials };
+  return { data: payload?.data as T, credentials: payload?.credentials, existing: payload?.existing };
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -290,18 +290,18 @@ export const dataApi = {
       });
       return toUserSession(row);
     },
-    /** Daftar pegawai + jana nama pengguna & kata laluan sementara (Pentadbir Sistem). */
+    /**
+     * Daftar pegawai + jana nama pengguna & kata laluan sementara (Pentadbir Sistem).
+     * `credentials` bernilai null apabila pegawai sudah ada dalam direktori (tiada pendua).
+     */
     createAccount: async (
       input: NewOfficerInput
-    ): Promise<{ officer: UserSession; credentials: IssuedCredentials }> => {
-      const { data, credentials } = await apiFetchEnvelope<OfficerRow>('/api/officers', {
+    ): Promise<{ officer: UserSession; credentials: IssuedCredentials | null; existing: boolean }> => {
+      const { data, credentials, existing } = await apiFetchEnvelope<OfficerRow>('/api/officers', {
         method: 'POST',
         body: JSON.stringify(input),
       });
-      if (!credentials) {
-        throw new ApiError('Worker tidak memulangkan kredensial pegawai.', 500, 'NO_CREDENTIALS');
-      }
-      return { officer: toUserSession(data), credentials };
+      return { officer: toUserSession(data), credentials: credentials ?? null, existing: Boolean(existing) };
     },
     /** Daftar pegawai ke direktori sahaja (tanpa akaun log masuk) — PPAJ/PPAU & KJ/KU. */
     createDirectoryOfficer: async (

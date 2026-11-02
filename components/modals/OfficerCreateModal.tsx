@@ -7,7 +7,9 @@ import { REGISTRATION_ROLES, DEFAULT_JAWATAN } from '@/lib/systemRoles';
 interface OfficerCreateModalProps {
   departments: DepartmentInfo[];
   defaultDept?: string;
-  onCreate: (input: NewOfficerInput) => Promise<{ officer: UserSession; credentials: IssuedCredentials }>;
+  onCreate: (
+    input: NewOfficerInput
+  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials | null }>;
   onClose: () => void;
   onShowToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -74,7 +76,12 @@ export default function OfficerCreateModal({
       setNama('');
       setEmel('');
       setTelefon('');
-      onShowToast(`Pengguna ${result.officer.name} didaftarkan.`, 'success');
+      onShowToast(
+        result.credentials
+          ? `Pengguna ${result.officer.name} didaftarkan.`
+          : `${result.officer.name} sudah ada dalam direktori — rekod sedia ada digunakan.`,
+        result.credentials ? 'success' : 'info'
+      );
     } catch (err) {
       setError((err as Error).message || 'Pendaftaran pengguna gagal.');
     } finally {

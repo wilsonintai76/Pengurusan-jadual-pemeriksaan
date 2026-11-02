@@ -35,9 +35,13 @@ interface DirektoriSectionProps {
   currentUser?: UserSession | null;
   users?: UserSession[];
   /** Pendaftaran hanya untuk pentadbir: Worker menjana nama pengguna & kata laluan. */
+  /**
+   * `credentials` null bermaksud pegawai itu sudah ada dalam direktori —
+   * kredensial sedia ada dikekalkan (tiada akaun pendua dicipta).
+   */
   onCreateOfficer?: (
     input: NewOfficerInput
-  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials }>;
+  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials | null }>;
   onResetCredentials?: (user: UserSession) => Promise<IssuedCredentials>;
   /** Tetapkan jawatan utama (memerlukan lantikan aktif bagi peranan itu). */
   onSetPrimaryRole?: (user: UserSession, roleId: string) => Promise<void>;
@@ -259,9 +263,14 @@ export default function DirektoriSection({
         sambungan: formData.ext.trim() || undefined,
         emel: email || undefined,
       });
-      setIssued(credentials);
-      setIssuedFor(`${officer.name} (${officer.dept})`);
-      setFormData({
+      if (credentials) {
+        setIssued(credentials);
+        setIssuedFor(`${officer.name} (${officer.dept})`);
+      } else {
+        setFormError(
+          `${officer.name} sudah ada dalam direktori. Rekod sedia ada digunakan — tiada akaun pendua dicipta.`
+        );
+      }      setFormData({
         name: '',
         email: '',
         dept: '',

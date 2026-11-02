@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarClock, Info, Save, Target, X } from 'lucide-react';
 import { InspectionSchedule } from '@/lib/types';
-import { deriveKategoriRuang } from '@/lib/kodLokasi';
 import { useDepartments, useLocations } from '@/lib/useReferenceData';
 import { dataApi, type CalendarItem } from '@/lib/dataApi';
 import { bulanSiri, kiraRuangSiri, kiraSasaranSiri, SIRI_LABEL, windowSiri } from '@/lib/siriPemeriksaan';
@@ -404,7 +403,7 @@ export default function ScheduleModal({
                     <CalendarClock className="h-3.5 w-3.5" /> {selectedLocation.nama}
                   </p>
                   <p>
-                    Kategori ruang: {selectedLocation.kategoriRuang || deriveKategoriRuang(selectedLocation.kodRuang) || '—'} ·{' '}
+                    {selectedLocation.bangunan || '—'} · {selectedLocation.aras || '—'} ·{' '}
                     {selectedLocation.anggaranAset ?? 0} unit aset (KEW.PA-7)
                   </p>
                   <p>

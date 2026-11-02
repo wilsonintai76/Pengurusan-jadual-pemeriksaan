@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   FileText, 
   Upload, 
@@ -69,6 +69,16 @@ export default function Kewpa7UploadModal({
     Array<{ data: any; matched: { id: string; kodRuang: string; nama: string } | null }>
   >([]);
   const [queueIndex, setQueueIndex] = useState(0);
+  /**
+   * Pegawai yang didaftarkan dalam modal ini (cth. lokasi pertama daripada PDF berbilang lokasi).
+   * `useOfficers()` dimuat sekali semasa buka, jadi tanpa memori ini nama yang sama akan
+   * didaftarkan semula untuk setiap lokasi dan mencipta akaun pendua.
+   */
+  const officerBaruRef = useRef<Map<string, UserSession>>(new Map());
+  const ingatOfficer = (officer: UserSession) => {
+    const key = officer.name.trim().toLowerCase();
+    if (key) officerBaruRef.current.set(key, officer);
+  };
 
   // Extracted Data State
   const [formData, setFormData] = useState<Partial<Kewpa7Record>>(
@@ -110,9 +120,9 @@ export default function Kewpa7UploadModal({
       const nama = String((entry as { nama?: unknown })?.nama ?? '').trim();
       if (!nama) return null;
 
-      const directory = officers.find(
-        (officer) => officer.name.trim().toLowerCase() === nama.toLowerCase()
-      );
+      const directory =
+        officerBaruRef.current.get(nama.toLowerCase()) ??
+        officers.find((officer) => officer.name.trim().toLowerCase() === nama.toLowerCase());
       if (directory) {
         return {
           id: directory.id || directory.email,
@@ -366,7 +376,10 @@ export default function Kewpa7UploadModal({
             dept: selectedDeptCode,
             role: officer.jawatan || '',
           });
-          createdOfficers.push({ nama: result.officer.name, credentials: result.credentials });
+          if (result.credentials) {
+            createdOfficers.push({ nama: result.officer.name, credentials: result.credentials });
+          }
+          ingatOfficer(result.officer);
           officerList.push({
             id: result.officer.id || result.officer.email,
             nama: result.officer.name,
@@ -382,6 +395,7 @@ export default function Kewpa7UploadModal({
             role: officer.jawatan || '',
           });
           createdOfficers.push({ nama: created.name, credentials: null });
+          ingatOfficer(created);
           officerList.push({
             id: created.id || created.email,
             nama: created.name,

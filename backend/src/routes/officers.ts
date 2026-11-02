@@ -196,6 +196,32 @@ export const officersRoute = new Hono<AppEnv>()
 
       // Emel pilihan: jika pentadbir beri emel rasmi, guna; jika tidak, jana daripada nama.
       const requestedEmail = String(body.emel ?? body.email ?? '').trim().toLowerCase();
+
+      // Nama yang sama dalam jabatan yang sama tidak didaftarkan dua kali
+      // (cth. muat naik KEW.PA-7 berbilang lokasi bagi pegawai yang sama).
+      const namaBaharu = String(body.nama ?? '').trim();
+      const existingByName = namaBaharu
+        ? await c.env.DB.prepare(
+            `SELECT id, nama, emel, department_id AS jabatan FROM officers
+              WHERE TRIM(UPPER(nama)) = TRIM(UPPER(?)) AND department_id = ? LIMIT 1`
+          )
+            .bind(namaBaharu, departmentId)
+            .first<{ id: string; nama: string; emel: string; jabatan: string }>()
+        : null;
+
+      if (existingByName && !requestedEmail) {
+        const sedia = await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`)
+          .bind(existingByName.id)
+          .first();
+        return c.json({
+          success: true,
+          existing: true,
+          message: `${existingByName.nama} sudah ada dalam direktori — rekod sedia ada digunakan.`,
+          data: sedia,
+          credentials: null,
+        });
+      }
+
       let emel: string;
       if (requestedEmail) {
         if (!/^[^@\s]+@[^@\s]+$/.test(requestedEmail)) {
