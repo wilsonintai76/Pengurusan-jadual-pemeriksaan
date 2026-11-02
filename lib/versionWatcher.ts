@@ -6,7 +6,6 @@ import { clearSession } from './authClient';
  * dimuat semula supaya pengguna tidak terus menggunakan kod/lajur data yang lapuk.
  */
 
-const AUTH_USER_KEY = 'ejas_auth_user';
 const RELOAD_GUARD_KEY = 'ejas:build-reload';
 const POLL_INTERVAL_MS = 60_000;
 const RELOAD_DELAY_MS = 2_000;
@@ -59,11 +58,6 @@ async function reloadWithNewBuild(build: number): Promise<void> {
   window.dispatchEvent(new CustomEvent(NEW_VERSION_EVENT, { detail: { build } }));
 
   clearSession();
-  try {
-    localStorage.removeItem(AUTH_USER_KEY);
-  } catch {
-    // storan setempat tidak tersedia
-  }
 
   await clearBrowserCaches();
   await new Promise((resolve) => window.setTimeout(resolve, RELOAD_DELAY_MS));

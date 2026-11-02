@@ -24,6 +24,12 @@ const app = new Hono<AppEnv>();
 
 // Global Middleware
 app.use('*', logger());
+
+// Respons API membawa data pegawai/sesi: jangan benarkan pelayar atau proksi menyimpannya.
+app.use('/api/*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+});
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

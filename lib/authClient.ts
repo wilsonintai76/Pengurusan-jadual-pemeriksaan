@@ -3,6 +3,31 @@ import type { AppointmentSummary, RoleAssignment, UserSession } from './types';
 import { normalizeRole } from './systemRoles';
 
 const TOKEN_KEY = 'ejas_auth_token';
+const USER_KEY = 'ejas_auth_user';
+
+/**
+ * Sesi disimpan dalam `sessionStorage`: pelayar mengosongkannya sendiri apabila tab/pelayar
+ * ditutup, jadi token dan profil tidak kekal pada komputer kongsi. Kunci lama dalam
+ * `localStorage` (sebelum perubahan ini) dibuang sekali supaya sesi lama tidak terus hidup.
+ */
+function sessionStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function purgeLegacyLocalSession(): void {
+  try {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(USER_KEY);
+  } catch {
+    // storan setempat tidak tersedia
+  }
+}
+
+if (typeof window !== 'undefined') purgeLegacyLocalSession();
 
 /** Selaras dengan `MIN_PASSWORD_LENGTH` pada Worker (`backend/src/lib/auth.ts`). */
 export const MIN_PASSWORD_LENGTH = 8;
@@ -32,7 +57,7 @@ export class AuthApiError extends Error {
 
 export function getAuthToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return sessionStore()?.getItem(TOKEN_KEY) ?? null;
   } catch {
     return null;
   }
@@ -40,10 +65,33 @@ export function getAuthToken(): string | null {
 
 export function setAuthToken(token: string | null): void {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    const store = sessionStore();
+    if (!store) return;
+    if (token) store.setItem(TOKEN_KEY, token);
+    else store.removeItem(TOKEN_KEY);
   } catch {
-    // storan setempat tidak tersedia
+    // storan sesi tidak tersedia
+  }
+}
+
+/** Profil pengguna yang disimpan bagi sesi tab ini (dikosongkan apabila tab ditutup). */
+export function getSavedUser(): UserSession | null {
+  try {
+    const raw = sessionStore()?.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as UserSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveUser(user: UserSession | null): void {
+  try {
+    const store = sessionStore();
+    if (!store) return;
+    if (user) store.setItem(USER_KEY, JSON.stringify(user));
+    else store.removeItem(USER_KEY);
+  } catch {
+    // storan sesi tidak tersedia
   }
 }
 
@@ -55,6 +103,7 @@ export function authHeaders(): Record<string, string> {
 
 export function clearSession(): void {
   setAuthToken(null);
+  saveUser(null);
 }
 
 export function isUnauthorized(error: unknown): boolean {

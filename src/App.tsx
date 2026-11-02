@@ -57,7 +57,7 @@ export default function App() {
   const [locationDeptFilter, setLocationDeptFilter] = useState<string>('');
   const [showLanding, setShowLanding] = useState<boolean>(() => {
     try {
-      return !localStorage.getItem('ejas_auth_user');
+      return !sessionStorage.getItem('ejas_auth_user');
     } catch {
       return true;
     }
@@ -101,7 +101,7 @@ export default function App() {
   useEffect(() => {
     let savedUser: UserSession | null = null;
     try {
-      const raw = localStorage.getItem('ejas_auth_user');
+      const raw = sessionStorage.getItem('ejas_auth_user');
       savedUser = raw ? (JSON.parse(raw) as UserSession) : null;
     } catch {
       savedUser = null;
@@ -145,7 +145,7 @@ export default function App() {
     const handleUnauthorized = () => {
       clearSession();
       try {
-        localStorage.removeItem('ejas_auth_user');
+        sessionStorage.removeItem('ejas_auth_user');
       } catch {
         // abaikan ralat storan setempat
       }
@@ -240,9 +240,9 @@ export default function App() {
   const handleSaveUserProfile = (updatedUser: UserSession) => {
     setCurrentUser(updatedUser);
     try {
-      localStorage.setItem('ejas_auth_user', JSON.stringify(updatedUser));
+      sessionStorage.setItem('ejas_auth_user', JSON.stringify(updatedUser));
     } catch (e) {
-      console.error('Error saving user profile to localStorage', e);
+      console.error('Error saving user profile to sessionStorage', e);
     }
 
     dataApi.officers
@@ -300,7 +300,7 @@ export default function App() {
     const user = session.user;
     setCurrentUser(user);
     try {
-      localStorage.setItem('ejas_auth_user', JSON.stringify(user));
+      sessionStorage.setItem('ejas_auth_user', JSON.stringify(user));
     } catch {
       // abaikan ralat storan setempat
     }
@@ -330,7 +330,7 @@ export default function App() {
       .then((saved) => {
         setCurrentUser(saved);
         try {
-          localStorage.setItem('ejas_auth_user', JSON.stringify(saved));
+          sessionStorage.setItem('ejas_auth_user', JSON.stringify(saved));
         } catch {
           // abaikan ralat storan setempat
         }
@@ -349,7 +349,7 @@ export default function App() {
   const handleLogout = () => {
     clearSession();
     try {
-      localStorage.removeItem('ejas_auth_user');
+      sessionStorage.removeItem('ejas_auth_user');
     } catch {
       // abaikan ralat storan setempat
     }
@@ -374,7 +374,7 @@ export default function App() {
         if (currentUser?.email === updatedUser.email) {
           setCurrentUser(saved);
           try {
-            localStorage.setItem('ejas_auth_user', JSON.stringify(saved));
+            sessionStorage.setItem('ejas_auth_user', JSON.stringify(saved));
           } catch (e) {
             console.error(e);
           }
