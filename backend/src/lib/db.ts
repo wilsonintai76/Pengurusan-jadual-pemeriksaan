@@ -173,18 +173,16 @@ export async function ensureOfficerId(
 
   await db
     .prepare(
-      `INSERT INTO officers (id, nama, emel, jawatan, gred, telefon, department_id, peranan)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO officers (id, nama, emel, gred, telefon, department_id)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .bind(
       newId,
       nama || emel!,
       emel || `${newId.toLowerCase()}@poliku.edu.my`,
-      input.jawatan?.trim() || 'Pegawai Pemeriksa (PP)',
       input.gred?.trim() || 'DH41',
       input.tel?.trim() || null,
-      departmentId,
-      'Pegawai Pemeriksa (PP)'
+      departmentId
     )
     .run();
 

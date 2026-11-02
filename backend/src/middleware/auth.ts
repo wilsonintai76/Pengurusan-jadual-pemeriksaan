@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { Bindings } from '../types';
 import { getSecret, verifyToken, type AuthUser } from '../lib/auth';
+import { primaryRoleSql } from '../lib/roles';
 
 export interface AuthVariables {
   auth?: AuthUser;
@@ -8,8 +9,11 @@ export interface AuthVariables {
 
 export type AppEnv = { Bindings: Bindings; Variables: AuthVariables };
 
+/** Peranan utama diterbitkan daripada `role_assignments` (tiada lajur pada `officers`). */
 const OFFICER_QUERY = `
-  SELECT id, nama, emel, peranan AS role, department_id AS dept
+  SELECT id, nama, emel,
+         COALESCE(${primaryRoleSql('officers.id')}, '') AS role,
+         department_id AS dept
   FROM officers
   WHERE id = ?
   LIMIT 1

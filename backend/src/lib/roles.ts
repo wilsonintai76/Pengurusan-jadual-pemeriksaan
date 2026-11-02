@@ -149,6 +149,19 @@ export interface AssignmentRow {
   createdAt: string;
 }
 
+/**
+ * SQL untuk label peranan utama pegawai — diterbitkan daripada `role_assignments`
+ * (satu sumber kebenaran), bukan lajur `officers.peranan` yang telah dibuang.
+ * Ganti `{officer}` dengan rujukan lajur id pegawai, cth. `o.id`.
+ */
+export function primaryRoleSql(officerRef: string): string {
+  return `(SELECT r.nama FROM role_assignments ra JOIN roles r ON r.id = ra.role_id
+            WHERE ra.officer_id = ${officerRef} AND ra.status = 'AKTIF'
+              AND ra.valid_from <= date('now')
+              AND (ra.valid_to IS NULL OR ra.valid_to >= date('now'))
+            ORDER BY ra.valid_from DESC, ra.created_at DESC LIMIT 1)`;
+}
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 /**

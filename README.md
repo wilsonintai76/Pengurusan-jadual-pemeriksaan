@@ -427,10 +427,25 @@ CRUD, tanpa sub-tab berasingan.
 
 ### Pendaftaran sebagai staf, peranan ditanda kemudian
 
-`POST /api/officers` menerima permintaan **tanpa** `role`: pegawai disimpan dengan `jawatan = 'Staf'`,
-`peranan` kosong dan **tiada lantikan automatik**. Paparan direktori menunjukkan **“Belum Dilantik”**
-(bukan lagi “Pensyarah / Pegawai Akademik” sebagai lalai) supaya staf pentadbiran juga terwakili.
-`PUT /api/officers/:id` dengan `role: ""` menarik balik jawatan.
+`POST /api/officers` menerima permintaan **tanpa** `role`: pegawai disimpan sebagai staf dan **tiada
+lantikan automatik**. Paparan direktori menunjukkan **“Belum Dilantik”** (bukan lagi
+“Pensyarah / Pegawai Akademik” sebagai lalai) supaya staf pentadbiran juga terwakili.
+
+Jadual `officers` **tidak lagi mempunyai lajur `jawatan` mahupun `peranan`** — kedua-duanya dibuang
+daripada D1 (migrasi `2026-11-03-buang-officers-jawatan-peranan.sql`). Peranan hanya dalam
+`role_assignments`, dan label paparan diterbitkan oleh `primaryRoleSql()` di
+`backend/src/lib/roles.ts`:
+
+| Tempat | Cara peranan dibaca |
+|---|---|
+| `GET /api/officers`, `GET /api/auth/me`, log masuk | subkueri `primaryRoleSql('o.id')` → `role` |
+| `requireAuth` | `primaryRoleSql('officers.id')` |
+| Penjaga ruang (`location_custodians`, `v_locations_full.penjagaJawatan`) | nama peranan aktif daripada `roles` |
+
+Migrasi itu **backfill** label lama menjadi lantikan sebenar sebelum lajur dibuang (PEMERIKSA →
+GLOBAL 24 bulan; KJ/KP/PA/PPAJ → DEPARTMENT; PL → LOCATION jika ada penjaga ruang; Pentadbir →
+GLOBAL), mencipta semula `v_locations_full`, kemudian `ALTER TABLE officers DROP COLUMN jawatan /
+peranan` (dijaga semakan `PRAGMA table_info(officers)` dalam `scripts/deploy.mjs`).
 
 Peranan diberi melalui **kotak tanda** dalam dialog pegawai — tab **Peranan & Lantikan**
 (selari tab **Maklumat**), bukan lagi sub-tab di halaman:

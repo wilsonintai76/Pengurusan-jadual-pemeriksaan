@@ -78,7 +78,6 @@ export interface ResolvedAccess {
     id: string;
     nama: string;
     emel: string;
-    jawatan: string;
     dept: string;
     status: string;
   };
@@ -139,7 +138,7 @@ export async function resolveAccess(
 ): Promise<ResolvedAccess | null> {
   const officer = await db
     .prepare(
-      `SELECT id, nama, emel, jawatan, department_id AS dept, status
+      `SELECT id, nama, emel, department_id AS dept, status
          FROM officers WHERE id = ? LIMIT 1`
     )
     .bind(officerId)

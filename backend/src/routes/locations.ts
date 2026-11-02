@@ -51,7 +51,13 @@ interface CustodianRow {
 }
 
 const CUSTODIAN_SELECT = `
-  SELECT lc.location_id, o.id, o.nama, o.jawatan, o.emel, o.telefon AS tel
+  SELECT lc.location_id, o.id, o.nama,
+         (SELECT r.nama FROM role_assignments ra JOIN roles r ON r.id = ra.role_id
+           WHERE ra.officer_id = o.id AND ra.status = 'AKTIF'
+             AND ra.valid_from <= date('now')
+             AND (ra.valid_to IS NULL OR ra.valid_to >= date('now'))
+           ORDER BY ra.valid_from DESC LIMIT 1) AS jawatan,
+         o.emel, o.telefon AS tel
   FROM location_custodians lc
   JOIN officers o ON o.id = lc.officer_id
 `;

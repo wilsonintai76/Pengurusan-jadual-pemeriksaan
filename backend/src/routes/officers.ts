@@ -6,7 +6,7 @@ import {
   generateUniqueUsername,
   issueCredentials,
 } from '../lib/credentials';
-import { DEFAULT_JAWATAN_ID, assignDefaultRoleForOfficer, hasActiveRole, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
+import { DEFAULT_JAWATAN_ID, assignDefaultRoleForOfficer, hasActiveRole, primaryRoleSql, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
 import { getAuthUser, requireAuth, requireRole, type AppEnv } from '../middleware/auth';
 import { canManageDepartment, loadManageScope } from '../lib/permissions';
 import { resolveAccess } from '../lib/access';
@@ -36,12 +36,11 @@ const OFFICER_SELECT = `
     o.id,
     o.nama,
     o.emel,
-    o.jawatan,
     o.gred,
     o.telefon,
     o.sambungan,
     o.department_id AS dept,
-    o.peranan AS role,
+    COALESCE(${primaryRoleSql('o.id')}, '') AS role,
     o.status
   FROM officers o
 `;
@@ -250,19 +249,17 @@ export const officersRoute = new Hono<AppEnv>()
       const id = body.id || `PEG-${Date.now().toString(36).toUpperCase()}`;
 
       await c.env.DB.prepare(
-        `INSERT INTO officers (id, nama, emel, jawatan, gred, telefon, sambungan, department_id, peranan, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO officers (id, nama, emel, gred, telefon, sambungan, department_id, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
           String(body.nama).trim(),
           emel,
-          body.jawatan || role || 'Staf',
           body.gred || body.grade || '-',
           body.telefon || body.phone || null,
           body.sambungan || body.ext || null,
           departmentId,
-          role,
           body.status || 'Aktif'
         )
         .run();
@@ -393,10 +390,10 @@ export const officersRoute = new Hono<AppEnv>()
       const id = `PEG-${Date.now().toString(36).toUpperCase()}`;
 
       await c.env.DB.prepare(
-        `INSERT INTO officers (id, nama, emel, jawatan, gred, telefon, sambungan, department_id, peranan, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO officers (id, nama, emel, gred, telefon, sambungan, department_id, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
-        .bind(id, nama, emel, jawatan.nama, '-', body.telefon || null, null, department.departmentId, jawatan.nama, 'Aktif')
+        .bind(id, nama, emel, '-', body.telefon || null, null, department.departmentId, 'Aktif')
         .run();
 
       await assignDefaultRoleForOfficer(c.env.DB, {
@@ -532,19 +529,14 @@ export const officersRoute = new Hono<AppEnv>()
         );
       }
 
-      await c.env.DB.prepare(
-        "UPDATE officers SET peranan = ?, updated_at = datetime('now') WHERE id = ?"
-      )
-        .bind(definition.nama, officer.id)
-        .run();
-
+      // Peranan utama kini diterbitkan automatik daripada lantikan aktif (tiada lajur pada officers).
       const saved = await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`)
         .bind(officer.id)
         .first();
 
       return c.json({
         success: true,
-        message: `Jawatan utama ditetapkan kepada ${definition.nama}.`,
+        message: `Peranan utama diterbitkan automatik daripada lantikan aktif (${definition.nama}).`,
         data: saved,
       });
     } catch (e: any) {
@@ -560,10 +552,10 @@ export const officersRoute = new Hono<AppEnv>()
       const body = await c.req.json();
 
       const current = await c.env.DB.prepare(
-        'SELECT id, peranan, department_id AS departmentId FROM officers WHERE id = ? OR emel = ? COLLATE NOCASE LIMIT 1'
+        'SELECT id, department_id AS departmentId FROM officers WHERE id = ? OR emel = ? COLLATE NOCASE LIMIT 1'
       )
         .bind(identifier, identifier)
-        .first<{ id: string; peranan: string; departmentId: string }>();
+        .first<{ id: string; departmentId: string }>();
 
       if (!current) {
         return c.json({ success: false, message: 'Pegawai tidak dijumpai' }, 404);
@@ -590,39 +582,13 @@ export const officersRoute = new Hono<AppEnv>()
 
       if (body.nama !== undefined) set('nama', body.nama);
       if (body.emel !== undefined) set('emel', body.emel);
-      if (body.jawatan !== undefined) set('jawatan', body.jawatan);
       if (body.gred !== undefined) set('gred', body.gred);
       if (body.grade !== undefined) set('gred', body.grade);
       if (body.telefon !== undefined) set('telefon', body.telefon);
       if (body.phone !== undefined) set('telefon', body.phone);
       if (body.sambungan !== undefined) set('sambungan', body.sambungan);
       if (body.ext !== undefined) set('sambungan', body.ext);
-      if (body.role !== undefined) {
-        const requested = String(body.role ?? '').trim();
-        const jawatanId = requested ? resolveRoleId(requested) : null;
-        const jawatan = jawatanId ? roleDefinition(jawatanId) : null;
-
-        if (!requested) {
-          // Kosong = tarik balik jawatan; pegawai kekal dalam direktori sebagai staf
-          // sehingga peranan diberi melalui Peranan & Lantikan.
-          set('peranan', '');
-        } else if (jawatan && jawatan.nama === current.peranan) {
-          // Segerak profil (cth. selepas log masuk) menghantar nilai sedia ada —
-          // biarkan tanpa validasi jawatan supaya peranan sistem tidak ditolak.
-        } else if (!jawatan || jawatan.kategori !== 'JAWATAN') {
-          return c.json(
-            {
-              success: false,
-              code: 'APPOINTMENT_REQUIRED',
-              message:
-                'Jawatan pegawai mesti salah satu jawatan hakiki. Pegawai Pemeriksa (PP) ialah lantikan — urus melalui menu Peranan & Lantikan.',
-            },
-            400
-          );
-        } else {
-          set('peranan', jawatan.nama);
-        }
-      }
+      // `body.role`/`body.jawatan` diabaikan: peranan hanya melalui `role_assignments`.
       if (body.status !== undefined) set('status', body.status);
 
       if (body.dept !== undefined) {

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings } from '../types';
 import { getAuthUser, requireAuth, type AppEnv } from '../middleware/auth';
-import { listAssignmentsForOfficer, resolveDisplayRole } from '../lib/roles';
+import { listAssignmentsForOfficer, primaryRoleSql, resolveDisplayRole } from '../lib/roles';
 import { summarizeInspectorAppointment } from '../lib/policies';
 import { mustChangePassword, readCredential, setMustChangePassword, writeCredential } from '../lib/credentials';
 import {
@@ -21,7 +21,7 @@ const PROFILE_SELECT = `
     o.telefon,
     o.sambungan,
     o.department_id AS dept,
-    o.peranan AS role,
+    COALESCE(${primaryRoleSql('o.id')}, '') AS role,
     o.status
   FROM officers o
   WHERE o.id = ?
@@ -47,7 +47,7 @@ const notConfigured = () => ({
 async function findOfficerByUsername(db: D1Database, username: string): Promise<OfficerRow | null> {
   return db
     .prepare(
-      `SELECT o.id, o.nama, o.emel, o.peranan AS role, o.department_id AS dept
+      `SELECT o.id, o.nama, o.emel, COALESCE(${primaryRoleSql('o.id')}, '') AS role, o.department_id AS dept
        FROM officers o
        WHERE o.emel = ? COLLATE NOCASE
           OR lower(substr(o.emel, 1, instr(o.emel, '@') - 1)) = lower(?)

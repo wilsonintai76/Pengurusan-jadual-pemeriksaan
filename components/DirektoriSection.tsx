@@ -29,7 +29,7 @@ import { useDepartments } from '@/lib/useReferenceData';
 import { UserSession, SystemRole, DepartmentInfo, LocationInfo, RoleAssignment, RoleScopeType } from '@/lib/types';
 import type { AccessPermission, IssuedCredentials, OfficerAccess, NewOfficerInput } from '@/lib/dataApi';
 import { dataApi } from '@/lib/dataApi';
-import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN, BELUM_DILANTIK } from '@/lib/systemRoles';
+import { JAWATAN_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, BELUM_DILANTIK } from '@/lib/systemRoles';
 
 /** Ambang amaran lantikan bakal tamat (hari). */
 const HARI_AMARAN_LUPUT = 60;
@@ -562,16 +562,12 @@ export default function DirektoriSection({
       return;
     }
 
-    const bolehTukarJawatan =
-      ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole) ||
-      editingUser.role === BELUM_DILANTIK;
-
     const updated: UserSession = {
       ...editingUser,
       name: formData.name.trim(),
       dept: formData.dept,
-      // Peranan sistem (lantikan) tidak boleh diubah dari direktori.
-      role: bolehTukarJawatan ? formData.role || BELUM_DILANTIK : editingUser.role,
+      // Peranan diuruskan melalui tick (role_assignments) — label paparan tidak diubah di sini.
+      role: editingUser.role,
       grade: formData.grade.trim(),
       phone: formData.phone.trim() || undefined,
       ext: formData.ext.trim() || undefined,
@@ -1421,27 +1417,6 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Jawatan Hakiki (pilihan)
-                    </label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
-                      className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
-                    >
-                      <option value="">— Belum dilantik (staf) —</option>
-                      {REGISTRATION_ROLES.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-amber-700 mt-1 font-medium">
-                      Semua pegawai didaftarkan dahulu sebagai staf. Peranan (KJ/KU, KP, PPAJ, Penyelia
-                      Lokasi, Pemeriksa) diberi kemudian melalui menu <strong>Peranan &amp; Lantikan</strong>{' '}
-                      mengikut polisi skop.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
                       No. Tel Bimbit
                     </label>
                     <input
@@ -1468,39 +1443,6 @@ export default function DirektoriSection({
                     </select>
                   </div>
                 </div>
-
-                {isRole(formData.role, 'PENYELIA_LOKASI') && (
-                  <div>
-                    <label className="block text-xs font-bold text-cyan-900 mb-1">
-                      Nama Bilik / Makmal Dipertanggungjawabkan (Penjaga Ruang)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.roomAssigned}
-                      onChange={(e) => setFormData({ ...formData, roomAssigned: e.target.value })}
-                      placeholder="Contoh: Makmal Multimedia & Pengaturcaraan 1"
-                      className="w-full p-2.5 text-xs bg-cyan-50 border border-cyan-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 text-cyan-950 font-medium"
-                    />
-                    <p className="text-[10px] text-cyan-700 mt-1 font-mono">
-                      * Polisi PBAC 1PP AM 2.4 akan melarang pegawai memeriksa bilik jagaan sendiri.
-                    </p>
-                  </div>
-                )}
-
-                {isRole(formData.role, 'KETUA_PROGRAM') && (
-                  <div>
-                    <label className="block text-xs font-bold text-blue-900 mb-1">
-                      Program Akademik / Kursus Dipertanggungjawabkan
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.programmeAssigned}
-                      onChange={(e) => setFormData({ ...formData, programmeAssigned: e.target.value })}
-                      placeholder="Contoh: Diploma Teknologi Maklumat (Teknologi Digital)"
-                      className="w-full p-2.5 text-xs bg-blue-50 border border-blue-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 text-blue-950 font-medium"
-                    />
-                  </div>
-                )}
               </div>
 
               {issued && (
@@ -1695,33 +1637,6 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Jawatan Hakiki
-                    </label>
-                    {editingUser &&
-                    !ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole) &&
-                    editingUser.role !== BELUM_DILANTIK ? (
-                      <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2">
-                        <p className="text-xs font-bold text-slate-800">{editingUser.role}</p>
-                        <p className="mt-0.5 text-[10px] font-medium text-slate-500">
-                          Peranan sistem (lantikan) — urus melalui menu Peranan &amp; Lantikan.
-                        </p>
-                      </div>
-                    ) : (
-                      <select
-                        value={formData.role}
-                        onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
-                        className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
-                      >
-                        <option value="">— Belum dilantik (staf) —</option>
-                        {REGISTRATION_ROLES.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
                       No. Tel Bimbit
                     </label>
                     <input
@@ -1748,36 +1663,6 @@ export default function DirektoriSection({
                     </select>
                   </div>
                 </div>
-
-                {isRole(formData.role, 'PENYELIA_LOKASI') && (
-                  <div>
-                    <label className="block text-xs font-bold text-cyan-900 mb-1">
-                      Nama Bilik / Makmal Dipertanggungjawabkan (Penjaga Ruang)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.roomAssigned}
-                      onChange={(e) => setFormData({ ...formData, roomAssigned: e.target.value })}
-                      placeholder="Contoh: Makmal Multimedia & Pengaturcaraan 1"
-                      className="w-full p-2.5 text-xs bg-cyan-50 border border-cyan-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 text-cyan-950 font-medium"
-                    />
-                  </div>
-                )}
-
-                {isRole(formData.role, 'KETUA_PROGRAM') && (
-                  <div>
-                    <label className="block text-xs font-bold text-blue-900 mb-1">
-                      Program Akademik / Kursus Dipertanggungjawabkan
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.programmeAssigned}
-                      onChange={(e) => setFormData({ ...formData, programmeAssigned: e.target.value })}
-                      placeholder="Contoh: Diploma Kejuruteraan Elektrik"
-                      className="w-full p-2.5 text-xs bg-blue-50 border border-blue-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 text-blue-950 font-medium"
-                    />
-                  </div>
-                )}
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">

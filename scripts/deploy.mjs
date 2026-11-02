@@ -125,6 +125,25 @@ if (!frontendOnly) {
         'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-11-02-location-kumpulan-aras.sql'
       );
     }
+
+    // Bersihkan lajur warisan `officers.jawatan` & `officers.peranan`: peranan kini
+    // hanya dalam `role_assignments`. Backfill + cipta semula view +DROP COLUMN.
+    const officerColumns = run(
+      'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --json --command "PRAGMA table_info(officers)"',
+      { capture: true }
+    );
+    if (/"name"\s*:\s*"peranan"/.test(officerColumns) || /"name"\s*:\s*"jawatan"/.test(officerColumns)) {
+      console.log('\u25b8 Migrasi: buang officers.jawatan & officers.peranan (peranan ikut role_assignments)\u2026');
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-11-03-buang-officers-jawatan-peranan.sql'
+      );
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --command "ALTER TABLE officers DROP COLUMN jawatan"'
+      );
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --command "ALTER TABLE officers DROP COLUMN peranan"'
+      );
+    }
     console.log('▶ Migrasi skema D1 (remote)…');
     run(
       'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/schema.sql'

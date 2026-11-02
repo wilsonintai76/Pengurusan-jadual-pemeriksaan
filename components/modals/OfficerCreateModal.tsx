@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, CheckCircle2, Copy, Loader2, Plus, ShieldCheck, UserPlus, X } from 'lucide-react';
-import type { DepartmentInfo, SystemRole, UserSession } from '@/lib/types';
+import type { DepartmentInfo, UserSession } from '@/lib/types';
 import type { IssuedCredentials, NewOfficerInput } from '@/lib/dataApi';
-import { REGISTRATION_ROLES, DEFAULT_JAWATAN } from '@/lib/systemRoles';
 
 interface OfficerCreateModalProps {
   departments: DepartmentInfo[];
@@ -28,7 +27,6 @@ export default function OfficerCreateModal({
   const [nama, setNama] = useState('');
   const [emel, setEmel] = useState('');
   const [dept, setDept] = useState(defaultDept || departments[0]?.id || '');
-  const [jawatan, setJawatan] = useState<SystemRole | ''>('');
   const [telefon, setTelefon] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -67,7 +65,6 @@ export default function OfficerCreateModal({
       const result = await onCreate({
         nama: nama.trim(),
         dept,
-        role: jawatan || undefined,
         telefon: telefon.trim() || undefined,
         emel: cleanEmail || undefined,
       });
@@ -129,28 +126,6 @@ export default function OfficerCreateModal({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block font-semibold text-slate-700">
-                Jawatan Hakiki <span className="font-normal text-slate-400">(pilihan)</span>
-              </label>
-              <select
-                value={jawatan}
-                onChange={(event) => setJawatan(event.target.value as SystemRole)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
-              >
-                <option value="">— Belum dilantik (staf) —</option>
-                {REGISTRATION_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[10px] font-medium text-amber-700">
-                Pegawai didaftar dahulu sebagai staf; peranan diberi kemudian melalui Peranan &amp;
-                Lantikan.
-              </p>
-            </div>
-
             <div>
               <label className="mb-1 block font-semibold text-slate-700">
                 Jabatan / Unit <span className="text-rose-500">*</span>

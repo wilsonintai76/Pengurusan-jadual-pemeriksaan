@@ -61,12 +61,12 @@ CREATE TABLE IF NOT EXISTS officers (
   id TEXT PRIMARY KEY,                       -- cth: 'PEG-001', 'OFF-WILSON'
   nama TEXT NOT NULL,
   emel TEXT NOT NULL UNIQUE,
-  jawatan TEXT NOT NULL,                     -- cth: 'Penolong Pegawai Teknologi Maklumat'
   gred TEXT NOT NULL,                        -- cth: 'FA29', 'DH41', 'N32'
   telefon TEXT,                              -- cth: '082-845512'
   sambungan TEXT,                            -- cth: 'Ext 124'
   department_id TEXT NOT NULL,
-  peranan TEXT NOT NULL DEFAULT 'Pegawai Pemeriksa', -- 'Ketua Jabatan', 'Pentadbir Sistem', dsb
+  -- Peranan TIDAK disimpan di sini: satu-satunya sumber ialah `role_assignments`
+  -- (peranan + skop + tempoh). Paparan diterbitkan melalui `primaryRoleSql()`.
   status TEXT DEFAULT 'Aktif',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
@@ -350,123 +350,9 @@ INSERT INTO role_category (role_id, kategori) VALUES
   ('PENTADBIR_SISTEM', 'LANTIKAN')
 ON CONFLICT(role_id) DO UPDATE SET kategori = excluded.kategori;
 
--- Migrasi data: officers.peranan -> role_assignments (idempotent).
--- Penjaga: (a) tiada baris RA-MIG dengan id sama, dan (b) tiada lantikan AKTIF lain
--- bagi peranan yang sama — supaya pegawai yang mendaftar melalui UI (yang sudah
--- menerima lantikan automatik) tidak menerima lantikan pendua apabila migrasi diulang.
--- Pegawai pemegang tempat (emel auto 'peg-…@poliku.edu.my') dikecualikan: mereka
--- hanyalah nama sementara pada jadual dan bukan pemeriksa yang dilantik.
-
--- Bersih: tutup lantikan RA-MIG yang bertindih dengan lantikan aktif lain.
-UPDATE role_assignments
-SET status = 'DITAMATKAN', valid_to = date('now'), updated_at = datetime('now')
-WHERE id LIKE 'RA-MIG-%'
-  AND status = 'AKTIF'
-  AND EXISTS (
-    SELECT 1 FROM role_assignments other
-    WHERE other.officer_id = role_assignments.officer_id
-      AND other.role_id = role_assignments.role_id
-      AND other.id <> role_assignments.id
-      AND other.id NOT LIKE 'RA-MIG-%'
-      AND other.status = 'AKTIF'
-      AND other.valid_from <= date('now')
-      AND (other.valid_to IS NULL OR other.valid_to >= date('now'))
-  );
-
--- Bersih: pegawai pemegang tempat (emel auto 'peg-…@poliku.edu.my') bukan pemeriksa
--- yang dilantik — tutup lantikan yang tercipta sebelum penapis ini diperkenalkan.
-UPDATE role_assignments
-SET status = 'DITAMATKAN', valid_to = date('now'), updated_at = datetime('now')
-WHERE status = 'AKTIF'
-  AND id LIKE 'RA-MIG-%'
-  AND officer_id IN (SELECT id FROM officers WHERE emel LIKE 'peg-%@poliku.edu.my');
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-PEMERIKSA', o.id, 'PEMERIKSA', 'GLOBAL', NULL,
-       date('now'), date('now', '+24 months'), 'AKTIF',
-       'Migrasi automatik daripada officers.peranan'
-FROM officers o
-WHERE o.peranan = 'Pegawai Pemeriksa'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-PEMERIKSA')
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'PEMERIKSA' AND ra.status = 'AKTIF'
-  );
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-PENYELIA-' || lc.location_id, o.id, 'PENYELIA_LOKASI', 'LOCATION', lc.location_id,
-       date('now'), NULL, 'AKTIF', 'Migrasi automatik (penjaga ruang KEW.PA-7)'
-FROM officers o
-JOIN location_custodians lc ON lc.officer_id = o.id
-WHERE o.peranan = 'Penyelia Lokasi'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-PENYELIA-' || lc.location_id)
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'PENYELIA_LOKASI' AND ra.status = 'AKTIF'
-  );
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-PENYELIA-JABATAN', o.id, 'PENYELIA_LOKASI', 'DEPARTMENT', o.department_id,
-       date('now'), NULL, 'AKTIF', 'Migrasi automatik (tiada ruang didaftarkan)'
-FROM officers o
-WHERE o.peranan = 'Penyelia Lokasi'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-PENYELIA-JABATAN')
-  AND NOT EXISTS (SELECT 1 FROM location_custodians lc WHERE lc.officer_id = o.id)
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'PENYELIA_LOKASI' AND ra.status = 'AKTIF'
-  );
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-PENOLONG-PEGAWAI-ASET', o.id, 'PENOLONG_PEGAWAI_ASET', 'DEPARTMENT', o.department_id,
-       date('now'), NULL, 'AKTIF', 'Migrasi automatik daripada officers.peranan'
-FROM officers o
-WHERE o.peranan = 'Penolong Pegawai Aset Jabatan/Unit'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-PENOLONG-PEGAWAI-ASET')
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'PENOLONG_PEGAWAI_ASET' AND ra.status = 'AKTIF'
-  );
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-KETUA-JABATAN', o.id, 'KETUA_JABATAN', 'DEPARTMENT', o.department_id,
-       date('now'), NULL, 'AKTIF', 'Migrasi automatik daripada officers.peranan'
-FROM officers o
-WHERE o.peranan = 'Ketua Jabatan'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-KETUA-JABATAN')
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'KETUA_JABATAN' AND ra.status = 'AKTIF'
-  );
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-KETUA-PROGRAM', o.id, 'KETUA_PROGRAM', 'DEPARTMENT', o.department_id,
-       date('now'), NULL, 'AKTIF', 'Migrasi automatik daripada officers.peranan'
-FROM officers o
-WHERE o.peranan = 'Ketua Program'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-KETUA-PROGRAM')
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'KETUA_PROGRAM' AND ra.status = 'AKTIF'
-  );
-
-INSERT INTO role_assignments (id, officer_id, role_id, scope_type, scope_id, valid_from, valid_to, status, notes)
-SELECT 'RA-MIG-' || o.id || '-PENTADBIR-SISTEM', o.id, 'PENTADBIR_SISTEM', 'GLOBAL', NULL,
-       date('now'), NULL, 'AKTIF', 'Migrasi automatik daripada officers.peranan'
-FROM officers o
-WHERE o.peranan = 'Pentadbir Sistem'
-  AND o.emel NOT LIKE 'peg-%@poliku.edu.my'
-  AND NOT EXISTS (SELECT 1 FROM role_assignments ra WHERE ra.id = 'RA-MIG-' || o.id || '-PENTADBIR-SISTEM')
-  AND NOT EXISTS (
-    SELECT 1 FROM role_assignments ra
-    WHERE ra.officer_id = o.id AND ra.role_id = 'PENTADBIR_SISTEM' AND ra.status = 'AKTIF'
-  );
+-- Migrasi data daripada `officers.peranan` telah dibuang: lajur itu tidak lagi wujud.
+-- Peranan kini hanya dalam `role_assignments`; backfill data lama dilakukan sekali
+-- oleh migrasi `2026-11-03-buang-officers-jawatan-peranan.sql`.
 
 -- --------------------------------------------------------------------
 -- 9b. KITARAN PEMERIKSAAN & AGIHAN (INSPECTION CYCLES & ASSIGNMENTS)
@@ -701,13 +587,16 @@ SELECT
     'Belum Dilantik'
   ) AS penjaga,
   COALESCE(
-    (SELECT o.jawatan FROM role_assignments ra
-       JOIN officers o ON o.id = ra.officer_id
+    (SELECT r.nama FROM role_assignments ra
+       JOIN roles r ON r.id = ra.role_id
       WHERE ra.scope_type = 'LOCATION' AND ra.scope_id = l.id
         AND ra.role_id = 'PENYELIA_LOKASI' AND ra.status = 'AKTIF'
         AND (ra.valid_to IS NULL OR ra.valid_to >= date('now'))
       ORDER BY ra.valid_from DESC LIMIT 1),
-    (SELECT o.jawatan FROM location_custodians lc JOIN officers o ON lc.officer_id = o.id WHERE lc.location_id = l.id LIMIT 1),
+    (SELECT r.nama FROM location_custodians lc
+       JOIN role_assignments ra ON ra.officer_id = lc.officer_id AND ra.status = 'AKTIF'
+       JOIN roles r ON r.id = ra.role_id
+      WHERE lc.location_id = l.id LIMIT 1),
     ''
   ) AS penjagaJawatan,
   COALESCE(
