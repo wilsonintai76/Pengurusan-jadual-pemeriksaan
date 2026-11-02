@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { SystemSettings, UserSession, RoleAssignment } from '@/lib/types';
 import { deriveManageScope } from '@/lib/manageScope';
+import { MINIMUM_PEGAWAI_PEMERIKSA, SASARAN_LIPUTAN_PERATUS } from '@/lib/pekeliling';
 import AnnualCalendarEditor from '@/components/AnnualCalendarEditor';
 
 interface TetapanSectionProps {
@@ -39,21 +40,35 @@ export default function TetapanSection({
   currentUser,
   myAssignments = [],
 }: TetapanSectionProps) {
-  const [formData, setFormData] = useState<SystemSettings>({ ...settings });
+  const [formData, setFormData] = useState<SystemSettings>({
+    ...settings,
+    sasaranLiputanPeratus: SASARAN_LIPUTAN_PERATUS,
+    minimumPegawaiPemeriksa: MINIMUM_PEGAWAI_PEMERIKSA,
+  });
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Nilai mandatori pekeliling sentiasa dikunci, walaupun rekod lama dalam KV menyimpang.
+  const tetapanPiawai = useMemo<SystemSettings>(
+    () => ({
+      ...settings,
+      sasaranLiputanPeratus: SASARAN_LIPUTAN_PERATUS,
+      minimumPegawaiPemeriksa: MINIMUM_PEGAWAI_PEMERIKSA,
+    }),
+    [settings]
+  );
+
   // Segerakkan borang apabila tetapan dimuat semula daripada Worker (contoh: tukar tahun sesi
   // di tempat lain atau muat semula selepas simpan), supaya tarikh yang disimpan sentiasa terpapar.
   useEffect(() => {
-    setFormData({ ...settings });
-  }, [settings]);
+    setFormData(tetapanPiawai);
+  }, [tetapanPiawai]);
 
   /** Ada perubahan yang belum dihantar ke Worker? */
   const kotor = useMemo(
-    () => JSON.stringify(formData) !== JSON.stringify(settings),
-    [formData, settings]
+    () => JSON.stringify(formData) !== JSON.stringify(tetapanPiawai),
+    [formData, tetapanPiawai]
   );
 
   // Amaran sebelum menutup tab dengan perubahan yang belum disimpan.
@@ -80,12 +95,16 @@ export default function TetapanSection({
     }
 
     setFormError('');
-    onSaveSettings(formData);
+    onSaveSettings({
+      ...formData,
+      sasaranLiputanPeratus: SASARAN_LIPUTAN_PERATUS,
+      minimumPegawaiPemeriksa: MINIMUM_PEGAWAI_PEMERIKSA,
+    });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const handleReset = () => setFormData({ ...settings });
+  const handleReset = () => setFormData(tetapanPiawai);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -235,35 +254,35 @@ export default function TetapanSection({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1">
               <span className="font-semibold text-slate-800 block">Sasaran Liputan Pemeriksaan</span>
-              <div className="flex items-center gap-2 mt-1">
-                <input
-                  type="number"
-                  disabled
-                  value={formData.sasaranLiputanPeratus}
-                  className="w-20 px-3 py-1.5 border border-slate-300 rounded-lg bg-slate-200 font-mono font-bold text-slate-800"
-                />
-                <span className="font-bold text-slate-900">% (Mandatori Pekeliling)</span>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="font-mono text-2xl font-extrabold text-slate-900">
+                  {SASARAN_LIPUTAN_PERATUS}
+                  <span className="text-base font-bold">%</span>
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-700">
+                  <Lock className="w-2.5 h-2.5" />
+                  Mandatori Pekeliling
+                </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Pekeliling 1PP AM 2.4 Bab C menetapkan kewajipan pemeriksaan fizikal ke atas 100% aset alih kerajaan setiap tahun.
+                Pekeliling 1PP AM 2.4 Bab C menetapkan kewajipan pemeriksaan fizikal ke atas 100% aset alih kerajaan setiap tahun — nilai tetap, tidak boleh diubah.
               </p>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1">
               <span className="font-semibold text-slate-800 block">Bilangan Minimum Pegawai Pemeriksa</span>
-              <div className="flex items-center gap-2 mt-1">
-                <input
-                  type="number"
-                  min="2"
-                  max="4"
-                  value={formData.minimumPegawaiPemeriksa}
-                  onChange={(e) => setFormData({ ...formData, minimumPegawaiPemeriksa: parseInt(e.target.value) || 2 })}
-                  className="w-20 px-3 py-1.5 border border-slate-300 rounded-lg bg-white font-mono font-bold text-slate-800 focus:border-amber-500 focus:outline-none"
-                />
-                <span className="font-bold text-slate-900">Orang Pegawai</span>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="font-mono text-2xl font-extrabold text-slate-900">
+                  {MINIMUM_PEGAWAI_PEMERIKSA}
+                </span>
+                <span className="text-[11px] font-bold text-slate-600">orang pegawai / lokasi</span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-700">
+                  <Lock className="w-2.5 h-2.5" />
+                  Mandatori Pekeliling
+                </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Setiap lokasi wajib diperiksa dan ditandatangani oleh sekurang-kurangnya dua (2) orang pegawai bertauliah.
+                Setiap lokasi wajib diperiksa dan ditandatangani oleh sekurang-kurangnya dua (2) orang pegawai bertauliah — dikuatkuasakan melalui dua slot pemeriksa pada setiap jadual.
               </p>
             </div>
           </div>

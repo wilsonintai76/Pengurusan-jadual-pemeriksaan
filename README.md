@@ -755,6 +755,18 @@ Flag tambahan: `node scripts/deploy.mjs --skip-migrate` untuk melangkau migrasi 
 
 ### Takwim Perancangan Tahunan (Tetapan)
 
+#### Tarikh sesi & nilai mandatori pekeliling
+
+- **Tarikh Mula / Tamat Sesi** disimpan ke Cloudflare KV melalui `PUT /api/settings` (Pentadbir Sistem).
+  Seksyen 1 Tetapan ada butang **Simpan** sendiri, dan bar terapung **“Perubahan belum disimpan”**
+  (Simpan · Set Semula) muncul sebaik sahaja ada medan diubah; amaran `beforeunload` menghalang
+  perubahan hilang tanpa disedari. Tarikh tamat mesti selepas tarikh mula.
+- **Sasaran Liputan Pemeriksaan (100%)** dan **Bilangan Minimum Pegawai Pemeriksa (2 orang/lokasi)**
+  ialah nilai mandatori 1PP AM 2.4 — dipaparkan sebagai rujukan sahaja (tiada medan isian) dan
+  dikunci pada Worker: `PUT /api/settings` sentiasa menulis `100` dan `2` walaupun klien menghantar
+  nilai lain. Kewajipan dua pegawai dikuatkuasakan secara struktur melalui dua slot pemeriksa
+  (`pemeriksa1_id` / `pemeriksa2_id`) pada setiap jadual.
+
 `annual_calendar` menyimpan **banyak tarikh bagi satu sesi** — menggantikan medan tunggal
 *"Tarikh Sasaran Mesyuarat Pra-JKPAK Bil. 1/{tahun}"*:
 

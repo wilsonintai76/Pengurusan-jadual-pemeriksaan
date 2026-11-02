@@ -21,6 +21,14 @@ const defaultSettings = (): SystemSettingsRecord => ({
 
 const KV_SETTINGS_KEY = 'system_settings';
 
+/**
+ * Nilai mandatori 1PP AM 2.4 — bukan konfigurasi boleh ubah:
+ * liputan pemeriksaan fizikal 100% setahun, dan minimum dua (2) pegawai pemeriksa
+ * bagi setiap lokasi (dikuatkuasakan melalui dua slot pemeriksa pada jadual).
+ */
+const MANDATORY_SASARAN_LIPUTAN_PERATUS = 100;
+const MANDATORY_MINIMUM_PEGAWAI_PEMERIKSA = 2;
+
 const PUBLIC_FIELDS = new Set([
   'namaInstitusi',
   'namaUnitAset',
@@ -66,6 +74,9 @@ export const settingsRoute = new Hono<AppEnv>()
       const merged: SystemSettingsRecord = {
         ...defaultSettings(),
         ...body,
+        // Nilai pekeliling tidak boleh ditimpa oleh klien.
+        sasaranLiputanPeratus: MANDATORY_SASARAN_LIPUTAN_PERATUS,
+        minimumPegawaiPemeriksa: MANDATORY_MINIMUM_PEGAWAI_PEMERIKSA,
       };
 
       // Store in Cloudflare KV
