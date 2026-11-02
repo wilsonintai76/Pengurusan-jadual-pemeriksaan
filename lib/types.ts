@@ -101,9 +101,9 @@ export type SystemRole =
   | 'Pegawai Aset (PA)'
   | 'Penolong Pegawai Aset Jabatan/Unit (PPAJ/PPAU)'
   | 'Penyelia Lokasi (PL)'
-  | 'Pensyarah / Pegawai Akademik'
   | 'Pegawai Pemeriksa (PP)'
-  | 'Pentadbir Sistem';
+  | 'Pentadbir Sistem'
+  | 'Belum Dilantik';
 
 /** Ringkasan peranan aktif pegawai (jawatan + lantikan). */
 export interface OfficerRoleSummary {

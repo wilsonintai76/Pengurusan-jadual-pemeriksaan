@@ -52,13 +52,6 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
     defaultTenureMonths: null,
     kategori: 'JAWATAN',
   },
-  {
-    id: 'PENSYARAH',
-    nama: 'Pensyarah / Pegawai Akademik',
-    scopeType: 'DEPARTMENT',
-    defaultTenureMonths: null,
-    kategori: 'JAWATAN',
-  },
 
   // --- LANTIKAN: kuasa bertempoh, boleh 0..n per pegawai ---
   {
@@ -81,7 +74,8 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
 export const JAWATAN_ROLES = ROLE_DEFINITIONS.filter((role) => role.kategori === 'JAWATAN');
 
 /** Id jawatan lalai bagi staf akademik tanpa jawatan pentadbiran aset. */
-export const DEFAULT_JAWATAN_ID = 'PENSYARAH';
+// Tiada jawatan lalai: pegawai didaftar dahulu tanpa peranan, lantikan diberi kemudian.
+export const DEFAULT_JAWATAN_ID: string | null = null;
 
 export function roleKategori(roleId: string): RoleKategori | null {
   return roleDefinition(roleId)?.kategori ?? null;
@@ -105,10 +99,6 @@ const LEGACY_ROLE_MAP: Record<string, string> = {
   'pegawai aset': 'PEGAWAI_ASET',
   'pegawai aset (pa)': 'PEGAWAI_ASET',
   pa: 'PEGAWAI_ASET',
-  pensyarah: 'PENSYARAH',
-  'pensyarah / pegawai akademik': 'PENSYARAH',
-  'pegawai akademik': 'PENSYARAH',
-  'pensyarah (p)': 'PENSYARAH',
   'ketua jabatan': 'KETUA_JABATAN',
   'ketua jabatan / unit': 'KETUA_JABATAN',
   'ketua jabatan / unit (kj/ku)': 'KETUA_JABATAN',
@@ -175,7 +165,6 @@ export const PRIMARY_ROLE_PRECEDENCE = [
   'PEGAWAI_ASET',
   'PENOLONG_PEGAWAI_ASET',
   'PENYELIA_LOKASI',
-  'PENSYARAH',
   'PEMERIKSA',
 ] as const;
 
@@ -398,6 +387,7 @@ export async function assignDefaultRoleForOfficer(
   }
 ): Promise<{ id: string; created: boolean } | null> {
   const roleId = resolveRoleId(params.roleValue) ?? DEFAULT_JAWATAN_ID;
+  if (!roleId) return null;
   const definition = roleDefinition(roleId);
   if (!definition) return null;
 

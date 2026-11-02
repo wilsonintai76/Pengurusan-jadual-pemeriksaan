@@ -6,7 +6,7 @@ import {
   generateUniqueUsername,
   issueCredentials,
 } from '../lib/credentials';
-import { DEFAULT_JAWATAN_ID, assignDefaultRoleForOfficer, hasActiveRole, primaryRoleSql, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
+import { assignDefaultRoleForOfficer, hasActiveRole, primaryRoleSql, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
 import { getAuthUser, requireAuth, requireRole, type AppEnv } from '../middleware/auth';
 import { canManageDepartment, loadManageScope } from '../lib/permissions';
 import { resolveAccess } from '../lib/access';
@@ -334,22 +334,26 @@ export const officersRoute = new Hono<AppEnv>()
         );
       }
 
-      const requestedJawatan = body.role || body.peranan || body.jawatan || null;
-      const jawatanId = resolveRoleId(requestedJawatan) ?? DEFAULT_JAWATAN_ID;
-      const jawatan = roleDefinition(jawatanId);
-      if (!jawatan || jawatan.kategori !== 'JAWATAN') {
+      const requestedJawatan = String(body.role ?? body.peranan ?? body.jawatan ?? '').trim();
+      const jawatan = requestedJawatan ? roleDefinition(resolveRoleId(requestedJawatan) ?? '') : null;
+
+      // Pendaftaran ke direktori tanpa peranan dibenarkan; peranan diberi kemudian.
+      if (requestedJawatan && !jawatan) {
         return c.json(
           {
             success: false,
-            code: 'APPOINTMENT_REQUIRED',
-            message:
-              'Pegawai Pemeriksa (PP) ialah lantikan, bukan jawatan. Daftarkan dengan jawatan hakiki dahulu.',
+            code: 'UNKNOWN_ROLE',
+            message: `Peranan '${requestedJawatan}' tidak dikenali.`,
           },
           400
         );
       }
 
-      const department = await resolveRegistrationDepartment(c.env.DB, String(body.dept), jawatan.nama);
+      const department = await resolveRegistrationDepartment(
+        c.env.DB,
+        String(body.dept),
+        jawatan?.nama ?? ''
+      );
       if (!department.departmentId) {
         return c.json(
           {
@@ -398,7 +402,7 @@ export const officersRoute = new Hono<AppEnv>()
 
       await assignDefaultRoleForOfficer(c.env.DB, {
         officerId: id,
-        roleValue: jawatan.nama,
+        roleValue: jawatan?.nama ?? null,
         departmentId: department.departmentId,
         createdById: auth.id,
       });

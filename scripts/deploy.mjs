@@ -144,6 +144,18 @@ if (!frontendOnly) {
         'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --command "ALTER TABLE officers DROP COLUMN peranan"'
       );
     }
+
+    // Buang peranan PENSYARAH: tiada lagi konsep "jawatan hakiki".
+    const pensyarahRows = run(
+      'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --json --command "SELECT COUNT(*) AS n FROM roles WHERE id = \'PENSYARAH\'"',
+      { capture: true }
+    );
+    if (/"n"\s*:\s*1/.test(pensyarahRows)) {
+      console.log('\u25b8 Migrasi: buang peranan PENSYARAH (tiada jawatan hakiki)\u2026');
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-11-03-buang-peranan-pensyarah.sql'
+      );
+    }
     console.log('▶ Migrasi skema D1 (remote)…');
     run(
       'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/schema.sql'

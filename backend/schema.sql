@@ -323,7 +323,6 @@ INSERT INTO roles (id, nama, scope_type, default_tenure_months, keterangan) VALU
   ('PEGAWAI_ASET', 'Pegawai Aset (PA)', 'DEPARTMENT', NULL, 'Pegawai aset jabatan/unit pemilik aset.'),
   ('PENOLONG_PEGAWAI_ASET', 'Penolong Pegawai Aset Jabatan/Unit (PPAJ/PPAU)', 'DEPARTMENT', NULL, 'Penolong pegawai aset jabatan/unit pemilik aset.'),
   ('PENYELIA_LOKASI', 'Penyelia Lokasi (PL)', 'LOCATION', NULL, 'Pegawai penjaga/pengawal ruang aset (KEW.PA-7).'),
-  ('PENSYARAH', 'Pensyarah / Pegawai Akademik', 'DEPARTMENT', NULL, 'Jawatan lalai staf akademik tanpa jawatan pentadbiran aset.'),
   ('PEMERIKSA', 'Pegawai Pemeriksa (PP)', 'GLOBAL', 24, 'LANTIKAN pemeriksa fizikal aset (1PP AM 2.4). Tempoh 2 tahun, boleh diperbaharui.'),
   ('PENTADBIR_SISTEM', 'Pentadbir Sistem', 'GLOBAL', NULL, 'Pentadbir sistem (superadmin) — unit SISTEM, bukan unit operasi.')
 ON CONFLICT(id) DO UPDATE SET
@@ -345,7 +344,6 @@ INSERT INTO role_category (role_id, kategori) VALUES
   ('PEGAWAI_ASET', 'JAWATAN'),
   ('PENOLONG_PEGAWAI_ASET', 'JAWATAN'),
   ('PENYELIA_LOKASI', 'JAWATAN'),
-  ('PENSYARAH', 'JAWATAN'),
   ('PEMERIKSA', 'LANTIKAN'),
   ('PENTADBIR_SISTEM', 'LANTIKAN')
 ON CONFLICT(role_id) DO UPDATE SET kategori = excluded.kategori;

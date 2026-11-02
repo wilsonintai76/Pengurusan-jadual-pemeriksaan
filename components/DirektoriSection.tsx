@@ -67,9 +67,8 @@ const hariKeTamat = (validTo?: string | null): number | null => {
   return Math.ceil((tamat - Date.now()) / 86_400_000);
 };
 
-/** Lantikan (kuasa bertempoh) sahaja — jawatan hakiki bukan lantikan. */
-const lantikanPegawai = (user: UserSession) =>
-  (user.roles ?? []).filter((r) => r.kategori === 'LANTIKAN');
+/** Semua peranan aktif pegawai — tiada pemisahan jawatan/lantikan lagi. */
+const lantikanPegawai = (user: UserSession) => user.roles ?? [];
 
 const adaLantikan = (user: UserSession, roleId: string) =>
   (user.roles ?? []).some((r) => r.roleId === roleId);
@@ -207,7 +206,7 @@ export default function DirektoriSection({
   const [statusFilter, setStatusFilter] = useState('SEMUA');
   // Penapis berasaskan PBAC: lantikan aktif, skop & tempoh sah
   const [capaianFilter, setCapaianFilter] = useState<
-    'SEMUA' | 'PENTADBIR' | 'PEMERIKSA' | 'PENYELIA' | 'TANPA_LANTIKAN' | 'AKAN_LUPUT'
+    'SEMUA' | 'PENTADBIR' | 'PEMERIKSA' | 'PENYELIA' | 'TANPA_PERANAN' | 'AKAN_LUPUT'
   >('SEMUA');
   const [sortBy, setSortBy] = useState<'name' | 'dept' | 'role' | 'grade'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -603,7 +602,7 @@ export default function DirektoriSection({
 
   // Export to CSV
   const handleExportCSV = () => {
-    let csv = 'Bil,Nama Pegawai,Emel,Jabatan,Peranan Rasmi,Lantikan & Skop,Tarikh Luput Terdekat,Gred,Telefon,Sambungan,Skop Tugas/Bilik,Status\n';
+    let csv = 'Bil,Nama Pegawai,Emel,Jabatan,Peranan Utama,Peranan & Skop,Tarikh Luput Terdekat,Gred,Telefon,Sambungan,Skop Tugas/Bilik,Status\n';
     filteredUsers.forEach((u, i) => {
       const scope = u.roomAssigned || u.programmeAssigned || '-';
       const lantikan =
@@ -650,7 +649,7 @@ export default function DirektoriSection({
       pentadbir: users.filter((u) => adaLantikan(u, 'PENTADBIR_SISTEM')).length,
       pemeriksa: users.filter((u) => adaLantikan(u, 'PEMERIKSA')).length,
       penyelia: users.filter((u) => adaLantikan(u, 'PENYELIA_LOKASI')).length,
-      tanpaLantikan: users.filter((u) => lantikanPegawai(u).length === 0).length,
+      tanpaPeranan: users.filter((u) => lantikanPegawai(u).length === 0).length,
       akanLuput: users.filter((u) => lantikanHampirLuput(u)).length,
     }),
     [users]
@@ -692,7 +691,7 @@ export default function DirektoriSection({
               ? adaLantikan(u, 'PEMERIKSA')
               : capaianFilter === 'PENYELIA'
                 ? adaLantikan(u, 'PENYELIA_LOKASI')
-                : capaianFilter === 'TANPA_LANTIKAN'
+                : capaianFilter === 'TANPA_PERANAN'
                   ? lantikanPegawai(u).length === 0
                   : lantikanHampirLuput(u);
 
@@ -881,8 +880,8 @@ export default function DirektoriSection({
           </div>
         </div>
 
-        {/* 2. KPI Jawatan (1 pegawai = 1 jawatan hakiki) */}
-        <div className="pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        {/* 2. KPI Peranan (bilangan pegawai yang memegang setiap peranan) */}
+        <div className="pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
           {JAWATAN_ROLES.map((jawatan) => {
             const count = roleCounts[jawatan.label] || 0;
             const cfg = ROLE_CONFIG[jawatan.id] ?? DEFAULT_ROLE_CONFIG;
@@ -961,7 +960,7 @@ export default function DirektoriSection({
                   onChange={(e) => setRoleFilter(e.target.value)}
                   className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-medium text-slate-700"
                 >
-                  <option value="SEMUA">Semua Peranan Rasmi</option>
+                  <option value="SEMUA">Semua Peranan</option>
                   {ROLE_LABELS_JAWATAN.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
@@ -1009,7 +1008,7 @@ export default function DirektoriSection({
                 { id: 'PENTADBIR', label: 'Pentadbir Sistem', count: capaianCounts.pentadbir, tone: 'rose' },
                 { id: 'PEMERIKSA', label: 'Pegawai Pemeriksa', count: capaianCounts.pemeriksa, tone: 'emerald' },
                 { id: 'PENYELIA', label: 'Penyelia Lokasi', count: capaianCounts.penyelia, tone: 'cyan' },
-                { id: 'TANPA_LANTIKAN', label: 'Tiada lantikan', count: capaianCounts.tanpaLantikan, tone: 'slate' },
+                { id: 'TANPA_PERANAN', label: 'Tiada peranan', count: capaianCounts.tanpaPeranan, tone: 'slate' },
                 { id: 'AKAN_LUPUT', label: `Luput ≤ ${HARI_AMARAN_LUPUT} hari`, count: capaianCounts.akanLuput, tone: 'amber' },
               ] as const).map((chip) => {
                 const active = capaianFilter === chip.id;
@@ -1075,7 +1074,7 @@ export default function DirektoriSection({
                 >
                   <option value="name">Nama Pegawai</option>
                   <option value="dept">Jabatan</option>
-                  <option value="role">Peranan Rasmi</option>
+                  <option value="role">Peranan Utama</option>
                   <option value="grade">No. Tel Bimbit</option>
                 </select>
                 <button
@@ -1737,7 +1736,7 @@ export default function DirektoriSection({
                 </div>
               )}
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-                <span className="text-slate-500">Jawatan Utama:</span>
+                <span className="text-slate-500">Peranan Utama:</span>
                 <span className="font-bold text-slate-900 font-mono">
                   {viewingUser.role}
                 </span>
@@ -1756,12 +1755,12 @@ export default function DirektoriSection({
                         <span className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
                           <span
                             className={`rounded px-1 py-0.2 font-bold ${
-                              r.kategori === 'LANTIKAN'
+                              r.validTo
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-slate-100 text-slate-600'
                             }`}
                           >
-                            {r.kategori === 'LANTIKAN' ? 'LANTIKAN' : 'JAWATAN'}
+                            {r.validTo ? 'BERTEMPOH' : 'KEKAL'}
                           </span>
                           <span className="text-slate-500">
                             {r.scopeType === 'GLOBAL'
@@ -1774,7 +1773,6 @@ export default function DirektoriSection({
                         </span>
                         {canManage &&
                           onSetPrimaryRole &&
-                          r.kategori === 'JAWATAN' &&
                           r.roleId !== roleIdOf(viewingUser.role) && (
                             <button
                               type="button"

@@ -28,7 +28,6 @@ export const SYSTEM_ROLES: RoleMeta[] = [
     kategori: 'JAWATAN',
   },
   { id: 'PENYELIA_LOKASI', label: 'Penyelia Lokasi (PL)', short: 'PL', kategori: 'JAWATAN' },
-  { id: 'PENSYARAH', label: 'Pensyarah / Pegawai Akademik', short: 'Pensyarah', kategori: 'JAWATAN' },
   { id: 'PEMERIKSA', label: 'Pegawai Pemeriksa (PP)', short: 'PP', kategori: 'LANTIKAN' },
   { id: 'PENTADBIR_SISTEM', label: 'Pentadbir Sistem', short: 'PS', kategori: 'LANTIKAN' },
 ];
@@ -42,25 +41,23 @@ export const JAWATAN_ROLES: RoleMeta[] = SYSTEM_ROLES.filter((role) => role.kate
 /** Lantikan bertempoh — diberi melalui menu Peranan & Lantikan. */
 export const LANTIKAN_ROLES: RoleMeta[] = SYSTEM_ROLES.filter((role) => role.kategori === 'LANTIKAN');
 
-/** Label jawatan sahaja (5 + Pensyarah). */
+/** Label jawatan sahaja (KJ/KU, KP, PA, PPAJ/PPAU, PL). */
 export const ROLE_LABELS_JAWATAN: SystemRole[] = JAWATAN_ROLES.map((role) => role.label);
 
 /** Pilihan jawatan semasa pendaftaran (PP & Pentadbir Sistem dikecualikan). */
-export const REGISTRATION_ROLES: SystemRole[] = ROLE_LABELS_JAWATAN.filter(
-  (label) => label !== 'Pensyarah / Pegawai Akademik'
-);
+export const REGISTRATION_ROLES: SystemRole[] = [...ROLE_LABELS_JAWATAN];
 
 /**
  * Label paparan bagi pegawai yang didaftarkan **tanpa jawatan**.
  *
  * Semua pegawai didaftarkan dahulu sebagai staf; peranan (jawatan/lantikan) diberi
- * kemudian melalui Peranan & Lantikan mengikut polisi skop. "Pensyarah / Pegawai
- * Akademik" bukan lagi pilihan lalai kerana staf pentadbiran juga mendaftar.
+ * kemudian melalui Peranan & Lantikan mengikut polisi skop. Tiada jawatan lalai ?
+ * staf akademik dan pentadbiran sama-sama didaftar tanpa peranan.
  */
 export const BELUM_DILANTIK = 'Belum Dilantik';
 
-/** Jawatan lalai bagi staf akademik tanpa jawatan pentadbiran aset. */
-export const DEFAULT_JAWATAN: SystemRole = 'Pensyarah / Pegawai Akademik';
+/** Tiada jawatan lalai: pegawai didaftar tanpa peranan. */
+export const DEFAULT_JAWATAN = '' as SystemRole;
 
 const LEGACY_ALIASES: Record<string, string> = {
   'ketua jabatan': 'KETUA_JABATAN',
@@ -72,10 +69,6 @@ const LEGACY_ALIASES: Record<string, string> = {
   kp: 'KETUA_PROGRAM',
   'pegawai aset': 'PEGAWAI_ASET',
   pa: 'PEGAWAI_ASET',
-  pensyarah: 'PENSYARAH',
-  'pensyarah (p)': 'PENSYARAH',
-  'pegawai akademik': 'PENSYARAH',
-  'pensyarah / pegawai akademik': 'PENSYARAH',
   'penolong pegawai aset': 'PENOLONG_PEGAWAI_ASET',
   'penolong pegawai aset jabatan/unit': 'PENOLONG_PEGAWAI_ASET',
   ppa: 'PENOLONG_PEGAWAI_ASET',
@@ -120,7 +113,7 @@ export function normalizeRole(value?: string | null, fallback: SystemRole = DEFA
   return roleMeta(value)?.label ?? fallback;
 }
 
-/** Lencana ringkas (KJ/KU, KP, PA, PPAJ/PPAU, PL, Pensyarah, PP, PS). */
+/** Lencana ringkas (KJ/KU, KP, PA, PPAJ/PPAU, PL, PP, PS). */
 export function roleShort(value?: string | null): string {
   return roleMeta(value)?.short ?? '—';
 }
