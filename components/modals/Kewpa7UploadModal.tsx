@@ -65,6 +65,10 @@ export default function Kewpa7UploadModal({
     nama: string;
   } | null>(null);
   const [r2Key, setR2Key] = useState<string>('');
+  const [queue, setQueue] = useState<
+    Array<{ data: any; matched: { id: string; kodRuang: string; nama: string } | null }>
+  >([]);
+  const [queueIndex, setQueueIndex] = useState(0);
 
   // Extracted Data State
   const [formData, setFormData] = useState<Partial<Kewpa7Record>>(
@@ -157,6 +161,40 @@ export default function Kewpa7UploadModal({
   };
 
   // Process File Upload via API
+  const applyEntry = (
+    d: any,
+    matched: { id: string; kodRuang: string; nama: string } | null
+  ) => {
+    setFormData({
+      bahagian: d.bahagian || '',
+      lokasi: d.lokasi || '',
+      kodLokasi: d.kodLokasi || '',
+      pegawaiBertanggungjawabList: mapExtractedOfficers(d.pegawaiBertanggungjawabList),
+      senaraiAset: d.senaraiAset || [],
+    });
+    setMatchedLocation(matched);
+  };
+
+  const setDiagnosticFrom = (payload: any) =>
+    setExtractDiagnostic(
+      Array.isArray(payload.missingFields) && payload.missingFields.length && payload.textPreview
+        ? { missing: payload.missingFields, preview: payload.textPreview }
+        : null
+    );
+
+  /** Selepas simpan: PDF berbilang lokasi diteruskan ke lokasi seterusnya, jika tidak modal ditutup. */
+  const finishOrNext = () => {
+    if (queueIndex < queue.length - 1) {
+      const next = queue[queueIndex + 1];
+      setQueueIndex(queueIndex + 1);
+      applyEntry(next.data, next.matched);
+      setDiagnosticFrom({});
+      setStep('review');
+      return;
+    }
+    onClose();
+  };
+
   const handleProcessFile = async (file: File) => {
     setSelectedFile(file);
     setStep('extracting');
@@ -193,20 +231,15 @@ export default function Kewpa7UploadModal({
       }
 
       if (payload?.success && payload.data) {
-        const d = payload.data;
-        setFormData({
-          bahagian: d.bahagian || '',
-          lokasi: d.lokasi || '',
-          kodLokasi: d.kodLokasi || '',
-          pegawaiBertanggungjawabList: mapExtractedOfficers(d.pegawaiBertanggungjawabList),
-          senaraiAset: d.senaraiAset || [],
-        });
-        setExtractDiagnostic(
-          Array.isArray(payload.missingFields) && payload.missingFields.length && payload.textPreview
-            ? { missing: payload.missingFields, preview: payload.textPreview }
-            : null
-        );
-        setMatchedLocation(payload.matchedLocation ?? null);
+        const entries: Array<{ data: any; matched: { id: string; kodRuang: string; nama: string } | null }> =
+          Array.isArray(payload.lokasiList) && payload.lokasiList.length > 1
+            ? payload.lokasiList.map((item: any) => ({ data: item.data, matched: item.matchedLocation ?? null }))
+            : [{ data: payload.data, matched: payload.matchedLocation ?? null }];
+
+        setQueue(entries);
+        setQueueIndex(0);
+        applyEntry(entries[0].data, entries[0].matched);
+        setDiagnosticFrom(payload);
         setR2Key(String(payload.r2Key ?? ''));
         setTimeout(() => setStep('review'), 400);
       } else {
@@ -410,7 +443,7 @@ export default function Kewpa7UploadModal({
       if (createdOfficers.length) {
         setIssuedOfficers(createdOfficers);
       } else {
-        onClose();
+        finishOrNext();
       }
     } catch (error) {
       alert(
@@ -436,6 +469,11 @@ export default function Kewpa7UploadModal({
                 <h3 className="font-bold text-base sm:text-lg">
                   {initialRecord ? 'Kemaskini Borang KEW.PA-7 (Edge D1)' : 'Muat Naik & Ekstrak Borang KEW.PA-7'}
                 </h3>
+                {queue.length > 1 && (
+                  <span className="text-[10px] bg-indigo-300 text-slate-950 font-extrabold px-2 py-0.5 rounded font-mono">
+                    Lokasi {queueIndex + 1} / {queue.length}
+                  </span>
+                )}
                 <span className="text-[10px] bg-emerald-400 text-slate-950 font-extrabold px-2 py-0.5 rounded font-mono">
                   Ekstrak Auto AI & D1
                 </span>
@@ -999,7 +1037,7 @@ export default function Kewpa7UploadModal({
                 type="button"
                 onClick={() => {
                   setIssuedOfficers(null);
-                  onClose();
+                  finishOrNext();
                 }}
                 className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
               >

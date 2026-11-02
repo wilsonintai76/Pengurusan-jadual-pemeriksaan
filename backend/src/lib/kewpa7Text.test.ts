@@ -1,5 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { parseKewpa7Officers, parseKewpa7Text, parseOfficerEntry } from './kewpa7Text';
+import { parseKewpa7Multi, parseKewpa7Officers, parseKewpa7Text, parseOfficerEntry } from './kewpa7Text';
+
+describe('parseKewpa7Multi', () => {
+  const halaman = (lokasi: string, kod: string, siri: string[]) =>
+    [
+      'Bahagian : UNIT KAMSIS',
+      `Lokasi : ${lokasi}`,
+      `Kod Lokasi : ${kod}`,
+      ...siri.map((s, i) => `${i + 1}. ${s} ALMARI / ALMARI PAKAIAN 25/02/2014`),
+    ].join('\n');
+
+  it('memisahkan satu PDF kepada lokasi mengikut Kod Lokasi', () => {
+    const hasil = parseKewpa7Multi([
+      halaman('Asrama Lelaki Blok A Aras 1 Bilik 01', '130101 / BGN / ALA / 01 / B01', ['KPT/PKS/I/07/390', 'KPT/PKS/I/07/391']),
+      halaman('Asrama Lelaki Blok A Aras 1 Bilik 02', '130101 / BGN / ALA / 01 / B02', ['KPT/PKS/I/07/388']),
+    ]);
+    expect(hasil).toHaveLength(2);
+    expect(hasil[0].kodLokasi).toBe('130101 / BGN / ALA / 01 / B01');
+    expect(hasil[0].senaraiAset).toHaveLength(2);
+    expect(hasil[1].kodLokasi).toBe('130101 / BGN / ALA / 01 / B02');
+    expect(hasil[1].senaraiAset.map((a) => a.noSiriPendaftaran)).toEqual(['KPT/PKS/I/07/388']);
+  });
+
+  it('mencantum halaman sambungan tanpa kod kepada lokasi sebelumnya', () => {
+    const hasil = parseKewpa7Multi([
+      halaman('BENGKEL MESIN', '130101 / BGN / JKM1 / 01 / B04', ['KPT/PKS/I/07/1']),
+      '2. KPT/PKS/I/07/2 MEJA 25/02/2014',
+    ]);
+    expect(hasil).toHaveLength(1);
+    expect(hasil[0].senaraiAset).toHaveLength(2);
+  });
+
+  it('satu halaman menghasilkan satu lokasi', () => {
+    expect(parseKewpa7Multi([halaman('X', '1 / BGN / A / 01 / B1', ['KPT/PKS/I/07/9'])])).toHaveLength(1);
+  });
+});
 
 const PLAIN_TEXT = [
   'KEW.PA-7  SENARAI ASET ALIH',

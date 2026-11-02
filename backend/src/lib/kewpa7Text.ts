@@ -354,3 +354,36 @@ export function parseKewpa7Text(text: string): Kewpa7Extracted | null {
     senaraiAset: assets,
   };
 }
+
+const normalisasiKod = (kod: string) => kod.replace(/\s+/g, '').toUpperCase();
+
+/**
+ * Satu PDF boleh memuatkan beberapa borang KEW.PA-7 (satu lokasi setiap borang, cth. bilik asrama).
+ * Halaman dikumpulkan mengikut Kod Lokasi: halaman tanpa kod (sambungan senarai aset) dicantum
+ * kepada lokasi sebelumnya, dan kod yang sama berturutan kekal satu lokasi.
+ */
+export function parseKewpa7Multi(pages: string[]): Kewpa7Extracted[] {
+  const chunks: Array<{ kod: string; text: string[] }> = [];
+
+  pages.forEach((page) => {
+    const kod = normalisasiKod(parseKewpa7Text(page)?.kodLokasi ?? '');
+    const last = chunks[chunks.length - 1];
+
+    if (!last || (kod && kod !== last.kod)) {
+      chunks.push({ kod, text: [page] });
+    } else {
+      last.text.push(page);
+    }
+  });
+
+  // Gabung kumpulan dengan kod yang sama (cth. lokasi yang sama muncul tidak berturutan).
+  const merged = new Map<string, string[]>();
+  chunks.forEach((chunk, index) => {
+    const key = chunk.kod || `__${index}`;
+    merged.set(key, [...(merged.get(key) ?? []), ...chunk.text]);
+  });
+
+  return [...merged.values()]
+    .map((texts) => parseKewpa7Text(texts.join('\n')))
+    .filter((entry): entry is Kewpa7Extracted => entry !== null);
+}

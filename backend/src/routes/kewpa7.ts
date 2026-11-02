@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Bindings } from '../types';
-import { parseKewpa7Text } from '../lib/kewpa7Text';
+import { parseKewpa7Multi, parseKewpa7Text, type Kewpa7Extracted } from '../lib/kewpa7Text';
 
 /** Ambil objek JSON pertama daripada output model (buang blok kod / teks tambahan). */
 function parseStructuredJson(raw: unknown): any | null {
@@ -49,6 +49,8 @@ export const kewpa7Route = new Hono<{ Bindings: Bindings }>()
       let extractedText = '';
       let aiError = '';
       let textSource = '';
+      let pageTexts: string[] = [];
+      let lokasiSemua: Kewpa7Extracted[] = [];
 
       // Step B0: Ekstrak teks PDF secara TEMPATAN menggunakan pdf.js (unpdf).
       // Percuma, pantas, dan deterministik — tiada panggilan AI untuk PDF berteks.
@@ -56,8 +58,9 @@ export const kewpa7Route = new Hono<{ Bindings: Bindings }>()
         try {
           const { extractText, getDocumentProxy } = await import('unpdf');
           const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
-          const { text } = await extractText(pdf, { mergePages: true });
-          const localText = (Array.isArray(text) ? text.join('\n') : String(text ?? '')).trim();
+          const { text } = await extractText(pdf, { mergePages: false });
+          pageTexts = (Array.isArray(text) ? text : [String(text ?? '')]).map((page) => String(page));
+          const localText = pageTexts.join('\n').trim();
           if (localText) {
             extractedText = localText;
             textSource = 'pdf.js (tempatan)';
@@ -91,11 +94,14 @@ export const kewpa7Route = new Hono<{ Bindings: Bindings }>()
       }
 
       // Step B2: Heuristik teks diutamakan (deterministik, pantas, tanpa kos AI).
+      // PDF dengan beberapa borang (satu lokasi setiap borang) dipisahkan mengikut Kod Lokasi.
       if (extractedText) {
-        const heuristic = parseKewpa7Text(extractedText);
+        const multi = pageTexts.length > 1 ? parseKewpa7Multi(pageTexts) : [];
+        const heuristic = multi.length > 0 ? multi[0] : parseKewpa7Text(extractedText);
         if (heuristic) {
           extractedData = heuristic;
           aiModelUsed = 'Heuristik teks';
+          lokasiSemua = multi.length > 1 ? multi : [heuristic];
         }
       }
 
@@ -163,26 +169,39 @@ ${extractedText.slice(0, 12000)}
       );
 
       // Kod lokasi ialah kunci unik — beritahu UI jika muat naik ini menimpa ruang sedia ada.
-      const code = String(extractedData?.kodLokasi ?? '').trim();
-      let matchedLocation: { id: string; kodRuang: string; nama: string; jabatan: string } | null = null;
-
-      if (code) {
-        matchedLocation = await c.env.DB.prepare(
+      const padanLokasi = async (kod: string) => {
+        if (!kod) return undefined;
+        const row = await c.env.DB.prepare(
           `SELECT id, kod_ruang AS kodRuang, nama, department_id AS jabatan
              FROM locations
             WHERE REPLACE(UPPER(kod_ruang), ' ', '') = REPLACE(UPPER(?), ' ', '')
             LIMIT 1`
         )
-          .bind(code)
+          .bind(kod)
           .first<{ id: string; kodRuang: string; nama: string; jabatan: string }>();
-      }
+        return row ?? undefined;
+      };
+
+      const matchedLocation = await padanLokasi(String(extractedData?.kodLokasi ?? '').trim());
+
+      // Beberapa lokasi dalam satu PDF: UI memproses satu demi satu (baris gilir).
+      const lokasiList =
+        lokasiSemua.length > 1
+          ? await Promise.all(
+              lokasiSemua.map(async (item) => ({
+                data: item,
+                matchedLocation: await padanLokasi(String(item.kodLokasi ?? '').trim()),
+              }))
+            )
+          : undefined;
 
       return c.json({
         success: true,
         source: `${textSource || 'Tiada teks'} | ${aiModelUsed} | R2 Storage`,
         r2Key,
         data: extractedData,
-        matchedLocation: matchedLocation ?? undefined,
+        matchedLocation,
+        lokasiList,
         missingFields,
         textPreview: missingFields.length ? extractedText.slice(0, 800) : undefined,
       });
