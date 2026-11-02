@@ -66,12 +66,40 @@ const PUBLIC_MUTATION_PATHS = new Set([
 ]);
 
 // PBAC: semua tulisan ke API mesti datang daripada sesi pegawai yang sah.
-// GET kekal terbuka supaya pelawat boleh menyemak portal (baca sahaja).
+// GET yang membawa data pegawai/lokasi/jadual juga memerlukan sesi; rujukan awam
+// (jabatan, peranan, kalendar, tetapan landing) kekal terbuka.
+const PROTECTED_READ_PREFIXES = [
+  '/api/officers',
+  '/api/role-assignments',
+  '/api/locations',
+  '/api/schedules',
+  '/api/cycles',
+  '/api/kewpa7',
+];
+
 app.use('/api/*', async (c, next) => {
   const method = c.req.method.toUpperCase();
-  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next();
-  if (PUBLIC_MUTATION_PATHS.has(new URL(c.req.url).pathname)) return next();
+  const path = new URL(c.req.url).pathname;
+  if (method === 'OPTIONS') return next();
+  if (method === 'GET' || method === 'HEAD') {
+    const protectedRead = PROTECTED_READ_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
+    return protectedRead ? requireAuth(c, next) : next();
+  }
+  if (PUBLIC_MUTATION_PATHS.has(path)) return next();
   return requireAuth(c, next);
+});
+
+// Statistik agregat (tiada data peribadi) untuk halaman landing sebelum log masuk.
+app.get('/api/public/stats', async (c) => {
+  const count = async (table: string) =>
+    (await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())?.n ?? 0;
+  const [jabatan, lokasi, jadual, pegawai] = await Promise.all([
+    count('departments'),
+    count('locations'),
+    count('inspection_schedules'),
+    count('officers'),
+  ]);
+  return c.json({ success: true, data: { jabatan, lokasi, jadual, pegawai } });
 });
 
 /**

@@ -40,7 +40,7 @@ import { dataApi, EMPTY_SETTINGS, ApiError, type AssetPayload } from '@/lib/data
 import { ShieldCheck } from 'lucide-react';
 import { NEW_VERSION_EVENT } from '@/lib/versionWatcher';
 import { ringkasLaporan, teksDokumen } from '@/lib/praJkpak';
-import { UNAUTHORIZED_EVENT, clearSession, fetchAuthMeta, type AuthSession } from '@/lib/authClient';
+import { UNAUTHORIZED_EVENT, clearSession, fetchAuthMeta, getAuthToken, type AuthSession } from '@/lib/authClient';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 import ForcePasswordModal from '@/components/modals/ForcePasswordModal';
 
@@ -70,7 +70,28 @@ export default function App() {
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  const [publicStats, setPublicStats] = useState<{
+    jabatan: number;
+    lokasi: number;
+    jadual: number;
+    pegawai: number;
+  } | null>(null);
+
   const reloadFromD1 = async () => {
+    // Tanpa sesi, API menolak data pegawai/lokasi/jadual: muat rujukan awam sahaja.
+    if (!getAuthToken()) {
+      const [departmentList, settingsData, stats] = await Promise.all([
+        dataApi.departments.list(),
+        dataApi.settings.get(),
+        dataApi.publicStats().catch(() => null),
+      ]);
+      setDepartments(departmentList.filter((department) => department.isOperational !== 0));
+      setSettings(settingsData);
+      setPublicStats(stats);
+      return;
+    }
+
+    setPublicStats(null);
     // Muatan utama tidak boleh bergantung pada audit (khusus pentadbir): satu kegagalan
     // tidak boleh menjatuhkan seluruh data.
     const [departmentList, officerList, locationList, scheduleList, settingsData] =
@@ -810,6 +831,7 @@ export default function App() {
           schedules={schedules}
           settings={settings}
           isLoadingData={isLoadingData}
+          publicStats={publicStats}
           onLogin={handleAuthSuccess}
           onGuest={() => {
             setShowLanding(false);

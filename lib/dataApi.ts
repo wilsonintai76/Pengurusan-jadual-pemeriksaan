@@ -554,6 +554,9 @@ export const dataApi = {
     fileUrl: (key: string) => `${API_BASE_URL}/api/storage/file/${encodeURIComponent(key)}`,
   },
 
+  publicStats: async (): Promise<{ jabatan: number; lokasi: number; jadual: number; pegawai: number }> =>
+    await apiFetch<{ jabatan: number; lokasi: number; jadual: number; pegawai: number }>('/api/public/stats'),
+
   settings: {
     get: async (): Promise<SystemSettings> => {
       const data = await apiFetch<Partial<SystemSettings>>('/api/settings');

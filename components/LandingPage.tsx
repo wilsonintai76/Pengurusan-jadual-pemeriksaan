@@ -39,6 +39,7 @@ interface LandingPageProps {
   schedules: InspectionSchedule[];
   settings: SystemSettings;
   isLoadingData?: boolean;
+  publicStats?: { jabatan: number; lokasi: number; jadual: number; pegawai: number } | null;
   onLogin: (session: AuthSession) => void;
   onGuest: () => void;
 }
@@ -132,6 +133,7 @@ export default function LandingPage({
   schedules,
   settings,
   isLoadingData,
+  publicStats,
   onLogin,
   onGuest,
 }: LandingPageProps) {
@@ -151,12 +153,12 @@ export default function LandingPage({
 
   const stats = useMemo(
     () => [
-      { label: 'Jabatan / Unit', value: departments.length },
-      { label: 'Lokasi Aset', value: locations.length },
-      { label: 'Jadual Pemeriksaan', value: schedules.length },
-      { label: 'Pegawai Berdaftar', value: officers.length },
+      { label: 'Jabatan / Unit', value: publicStats?.jabatan ?? departments.length },
+      { label: 'Lokasi Aset', value: publicStats?.lokasi ?? locations.length },
+      { label: 'Jadual Pemeriksaan', value: publicStats?.jadual ?? schedules.length },
+      { label: 'Pegawai Berdaftar', value: publicStats?.pegawai ?? officers.length },
     ],
-    [departments.length, locations.length, schedules.length, officers.length]
+    [publicStats, departments.length, locations.length, schedules.length, officers.length]
   );
   const hasDirectoryData = stats.some((stat) => stat.value > 0);
 
@@ -503,7 +505,7 @@ export default function LandingPage({
                 </p>
               )}
 
-              {!isLoadingData && officers.length === 0 && !error && (
+              {!isLoadingData && (publicStats ? publicStats.pegawai : officers.length) === 0 && !error && (
                 <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
                   Direktori pegawai belum dimuatkan. Akaun pegawai didaftarkan oleh Pentadbir Sistem
                   melalui menu Direktori Pegawai.
