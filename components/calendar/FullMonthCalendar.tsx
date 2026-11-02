@@ -66,6 +66,8 @@ export default function FullMonthCalendar({
   const [selectedDept, setSelectedDept] = useState<string>('SEMUA');
   const [selectedStatus, setSelectedStatus] = useState<string>('SEMUA');
   const [activeModalEvent, setActiveModalEvent] = useState<InspectionSchedule | null>(null);
+  const [paparan, setPaparan] = useState<'jadual' | 'kalendar'>('jadual');
+  const [semuaBulan, setSemuaBulan] = useState(false);
 
   // Filtered schedules for calendar
   const filteredSchedules = useMemo(() => {
@@ -75,6 +77,19 @@ export default function FullMonthCalendar({
       return matchDept && matchStatus;
     });
   }, [schedules, selectedDept, selectedStatus]);
+
+  const jadualRows = useMemo(() => {
+    const awal = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const akhir = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59);
+    return [...filteredSchedules]
+      .filter((s) => {
+        if (semuaBulan) return true;
+        const mula = new Date(s.tarikhMula + 'T00:00:00');
+        const tamat = new Date(s.tarikhTamat + 'T23:59:00');
+        return mula <= akhir && tamat >= awal;
+      })
+      .sort((a, b) => a.tarikhMula.localeCompare(b.tarikhMula) || a.lokasi.localeCompare(b.lokasi));
+  }, [filteredSchedules, currentDate, semuaBulan]);
 
   // Transform schedules into CalendarEvent
   const events: CalendarEvent[] = useMemo(() => {
@@ -292,8 +307,27 @@ export default function FullMonthCalendar({
           )}
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600">
+        {/* Legend + togol paparan */}
+        <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-600">
+          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+            {(['jadual', 'kalendar'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setPaparan(m)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
+                  paparan === m ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {m === 'jadual' ? 'Jadual' : 'Kalendar'}
+              </button>
+            ))}
+          </div>
+          {paparan === 'jadual' && (
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={semuaBulan} onChange={(e) => setSemuaBulan(e.target.checked)} />
+              <span>Semua bulan</span>
+            </label>
+          )}
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
             <span>Selesai</span>
@@ -314,6 +348,70 @@ export default function FullMonthCalendar({
       </div>
 
       {/* 5. React Big Calendar Render Container */}
+      {paparan === 'jadual' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 border-b border-slate-200">
+                <th className="px-3 py-2 font-bold">Tarikh</th>
+                <th className="px-3 py-2 font-bold">Jabatan</th>
+                <th className="px-3 py-2 font-bold">Lokasi</th>
+                <th className="px-3 py-2 font-bold text-right">Aset</th>
+                <th className="px-3 py-2 font-bold">Pemeriksa</th>
+                <th className="px-3 py-2 font-bold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jadualRows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                    Tiada jadual pemeriksaan bagi {semuaBulan ? 'penapis ini' : `${currentMonthName} ${currentYear}`}.
+                  </td>
+                </tr>
+              )}
+              {jadualRows.map((s) => (
+                <tr
+                  key={s.id}
+                  onClick={() => {
+                    setActiveModalEvent(s);
+                    if (onSelectSchedule) onSelectSchedule(s);
+                  }}
+                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer"
+                >
+                  <td className="px-3 py-2 font-mono whitespace-nowrap text-slate-700">
+                    {s.tarikhMula.slice(5).split('-').reverse().join('/')} – {s.tarikhTamat.slice(5).split('-').reverse().join('/')}
+                  </td>
+                  <td className="px-3 py-2 font-bold text-slate-800">{s.jabatan}</td>
+                  <td className="px-3 py-2 text-slate-800">{s.lokasi}</td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-700">{s.kuantiti ?? '-'}</td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {[s.pemeriksa1, s.pemeriksa2].filter(Boolean).join(', ') || (
+                      <span className="text-rose-500 italic">Belum dituntut</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        s.status === 'Selesai'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : s.status === 'Sedang Dijalankan'
+                          ? 'bg-amber-100 text-amber-800'
+                          : s.status === 'Tertangguh'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {s.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {paparan === 'kalendar' && (
       <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
         <div className="h-[460px]">
           <Calendar
@@ -343,6 +441,7 @@ export default function FullMonthCalendar({
           />
         </div>
       </div>
+      )}
 
       {/* 6. Event Detail Modal when user clicks an event on the calendar */}
       {activeModalEvent && (
