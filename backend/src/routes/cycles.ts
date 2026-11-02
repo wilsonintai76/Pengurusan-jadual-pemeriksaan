@@ -399,6 +399,56 @@ export const cyclesRoute = new Hono<AppEnv>()
     }
   })
 
+  // 7b. PADAM KITARAN (pentadbir) — untuk kitaran ujian atau tersilap cipta.
+  // Semua jadual anak (parameter, statistik, kumpulan, agihan, snapshot, penugasan semula)
+  // menggunakan ON DELETE CASCADE. Slot yang sudah dituntut disekat supaya rekod
+  // pemeriksaan sebenar tidak hilang.
+  .delete('/:id', requireRole('PENTADBIR_SISTEM'), async (c) => {
+    try {
+      const cycle = await getCycle(c.env.DB, c.req.param('id'));
+      if (!cycle) {
+        return c.json({ success: false, code: 'NOT_FOUND', message: 'Kitaran tidak dijumpai.' }, 404);
+      }
+
+      const claimed = await c.env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM inspection_assignments
+          WHERE cycle_id = ? AND status = 'DITUNTUT'`
+      )
+        .bind(cycle.id)
+        .first<{ n: number }>();
+
+      if ((claimed?.n ?? 0) > 0) {
+        return c.json(
+          {
+            success: false,
+            code: 'CYCLE_HAS_CLAIMS',
+            message: `Kitaran ${cycle.kod} mempunyai ${claimed?.n} slot yang telah dituntut. Batalkan tuntutan terlebih dahulu.`,
+          },
+          409
+        );
+      }
+
+      await c.env.DB.prepare('DELETE FROM inspection_cycles WHERE id = ?').bind(cycle.id).run();
+
+      const auth = getAuthUser(c);
+      await recordAudit(c.env.DB, {
+        actorId: auth?.id ?? null,
+        actorName: auth?.emel ?? 'sistem',
+        actedAsRole: auth?.role ?? 'Pentadbir Sistem',
+        action: 'cycle:delete',
+        departmentId: auth?.dept ?? 'PENTADBIRAN',
+        decision: 'PERMIT',
+        policyId: 'POL_INSPECTION_CYCLE',
+        resourceId: cycle.id,
+        notes: `Kitaran ${cycle.kod} (${cycle.status}) dipadam.`,
+      });
+
+      return c.json({ success: true, message: `Kitaran ${cycle.kod} dipadam.` });
+    } catch (e: any) {
+      return c.json({ success: false, message: 'Ralat memadam kitaran: ' + e.message }, 500);
+    }
+  })
+
   // 8. PENUGASAN SEMULA SLOT (eksplisit, direkod)
   .post('/:id/reassign', requireRole('PENTADBIR_SISTEM'), async (c) => {
     try {

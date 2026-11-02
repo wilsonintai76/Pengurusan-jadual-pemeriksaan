@@ -509,6 +509,8 @@ export const dataApi = {
         method: 'POST',
         body: JSON.stringify({}),
       }),
+    remove: (id: string) =>
+      apiFetch<null>(`/api/cycles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     eligible: (id: string, scheduleId: string) =>
       apiFetch<EligibleInspector[]>(
         `/api/cycles/${encodeURIComponent(id)}/eligible?scheduleId=${encodeURIComponent(scheduleId)}`

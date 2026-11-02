@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ShieldAlert,
   Sparkles,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -107,6 +108,11 @@ export default function KitaranSection({
       try {
         setDetail(await dataApi.cycles.get(id));
       } catch (error) {
+        // Kitaran mungkin telah dipadam — jangan papar ralat, kosongkan butiran sahaja.
+        if ((error as { status?: number }).status === 404) {
+          setDetail(null);
+          return;
+        }
         onShowToast(`Gagal memuatkan butiran kitaran: ${(error as Error).message}`, 'error');
       }
     },
@@ -175,6 +181,21 @@ export default function KitaranSection({
       }
       await dataApi.cycles.close(selectedId);
       return 'Kitaran ditutup.';
+    });
+
+  const handleDelete = () =>
+    runAction(async () => {
+      if (!selectedId) throw new Error('Pilih kitaran terlebih dahulu.');
+      if (
+        !window.confirm(
+          'Padam kitaran ini? Semua parameter, kumpulan pemeriksa dan agihan slot bagi kitaran ini akan dibuang. Tindakan ini tidak boleh dibatalkan.'
+        )
+      ) {
+        throw new Error('Dibatalkan oleh pengguna.');
+      }
+      await dataApi.cycles.remove(selectedId);
+      setSelectedId(null);
+      return 'Kitaran dipadam.';
     });
 
   const openReassign = async (assignment: CycleAssignment) => {
@@ -529,10 +550,25 @@ export default function KitaranSection({
                           type="button"
                           onClick={handleClose}
                           disabled={isWorking || detail.cycle.status === 'SELESAI'}
+                          title={
+                            detail.cycle.status === 'SELESAI'
+                              ? 'Kitaran sudah ditutup.'
+                              : 'Tutup kitaran — penjanaan dan penugasan semula akan disekat'
+                          }
                           className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                         >
                           <Lock className="h-3.5 w-3.5" />
-                          Tutup
+                          {detail.cycle.status === 'SELESAI' ? 'Ditutup' : 'Tutup'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={isWorking}
+                          title="Padam kitaran ini (kitaran ujian / tersilap cipta)"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Padam
                         </button>
                       </div>
                     )}
