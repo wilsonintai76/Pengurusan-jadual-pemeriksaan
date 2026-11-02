@@ -337,7 +337,11 @@ export default function DirektoriSection({
    * Selaraskan `role_assignments` dengan kotak yang ditanda:
    * tamatkan yang tidak ditanda / berubah, cipta yang baharu.
    */
-  const simpanPeranan = async (officerId: string, jabatan: string): Promise<boolean> => {
+  const simpanPeranan = async (
+    officerId: string,
+    jabatan: string,
+    jabatanLama?: string
+  ): Promise<boolean> => {
     if (perananTanda.PEMERIKSA && !ppMula) {
       setRalatPeranan('Sila tetapkan tarikh lantikan Pegawai Pemeriksa.');
       return false;
@@ -347,6 +351,8 @@ export default function DirektoriSection({
       return false;
     }
 
+    // Pertukaran jabatan menjadikan skop lama tidak sah — lantikan berjabatan mesti dicipta semula.
+    const jabatanBerubah = Boolean(jabatanLama && jabatanLama !== jabatan);
     const skopUntuk = (roleId: string) => {
       const opsi = PERANAN_BOLEH_DITANDA.find((item) => item.id === roleId);
       if (!opsi) return { scopeType: 'DEPARTMENT' as RoleScopeType, scopeId: jabatan as string | undefined };
@@ -356,6 +362,8 @@ export default function DirektoriSection({
     };
 
     const berubah = (sedia: RoleAssignment, roleId: string) => {
+      const opsi = PERANAN_BOLEH_DITANDA.find((item) => item.id === roleId);
+      if (jabatanBerubah && opsi?.scope === 'DEPARTMENT') return true;
       if (roleId === 'PENYELIA_LOKASI') return (sedia.scopeId ?? '') !== plLokasi;
       if (roleId === 'PEMERIKSA') return sedia.validFrom !== ppMula || (sedia.validTo ?? '') !== ppTamat;
       return false;
@@ -577,7 +585,7 @@ export default function DirektoriSection({
     }
 
     try {
-      await simpanPeranan(editingUser.id || editingUser.email, formData.dept);
+      await simpanPeranan(editingUser.id || editingUser.email, formData.dept, editingUser.dept);
       onRolesChanged?.();
     } catch (error) {
       setRalatPeranan((error as Error).message || 'Peranan gagal dikemas kini.');
@@ -731,6 +739,7 @@ export default function DirektoriSection({
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {PERANAN_BOLEH_DITANDA.map((opsi) => {
           const ditanda = Boolean(perananTanda[opsi.id]);
+          const sedia = lantikanSedia.find((item) => item.roleId === opsi.id);
           return (
             <label
               key={opsi.id}
@@ -749,6 +758,13 @@ export default function DirektoriSection({
                   {opsi.ringkas} · {opsi.label}
                 </span>
                 <span className="block text-[10px] text-slate-500">{opsi.nota}</span>
+                {ditanda && sedia && (
+                  <span className="mt-0.5 block font-mono text-[9px] text-slate-500">
+                    {sedia.scopeType}
+                    {sedia.scopeId ? ` ${sedia.scopeId}` : ' (global)'} ·{' '}
+                    {sedia.validTo ? `tamat ${sedia.validTo}` : 'kekal'}
+                  </span>
+                )}
               </span>
             </label>
           );
@@ -1391,7 +1407,7 @@ export default function DirektoriSection({
                     </label>
                     <select
                       value={formData.dept}
-                      onChange={(e) => setFormData({ ...formData, dept: e.target.value })}
+                      onChange={(e) => { setFormData({ ...formData, dept: e.target.value }); setPlLokasi(''); }}
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono font-medium"
                     >
                       <option value="">— Pilih Jabatan —</option>
@@ -1665,7 +1681,7 @@ export default function DirektoriSection({
                     </label>
                     <select
                       value={formData.dept}
-                      onChange={(e) => setFormData({ ...formData, dept: e.target.value })}
+                      onChange={(e) => { setFormData({ ...formData, dept: e.target.value }); setPlLokasi(''); }}
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 font-mono font-medium"
                     >
                       <option value="">— Pilih Jabatan —</option>
