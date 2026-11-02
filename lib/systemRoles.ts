@@ -46,7 +46,18 @@ export const LANTIKAN_ROLES: RoleMeta[] = SYSTEM_ROLES.filter((role) => role.kat
 export const ROLE_LABELS_JAWATAN: SystemRole[] = JAWATAN_ROLES.map((role) => role.label);
 
 /** Pilihan jawatan semasa pendaftaran (PP & Pentadbir Sistem dikecualikan). */
-export const REGISTRATION_ROLES: SystemRole[] = [...ROLE_LABELS_JAWATAN];
+export const REGISTRATION_ROLES: SystemRole[] = ROLE_LABELS_JAWATAN.filter(
+  (label) => label !== 'Pensyarah / Pegawai Akademik'
+);
+
+/**
+ * Label paparan bagi pegawai yang didaftarkan **tanpa jawatan**.
+ *
+ * Semua pegawai didaftarkan dahulu sebagai staf; peranan (jawatan/lantikan) diberi
+ * kemudian melalui Peranan & Lantikan mengikut polisi skop. "Pensyarah / Pegawai
+ * Akademik" bukan lagi pilihan lalai kerana staf pentadbiran juga mendaftar.
+ */
+export const BELUM_DILANTIK = 'Belum Dilantik';
 
 /** Jawatan lalai bagi staf akademik tanpa jawatan pentadbiran aset. */
 export const DEFAULT_JAWATAN: SystemRole = 'Pensyarah / Pegawai Akademik';

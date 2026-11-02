@@ -30,7 +30,7 @@ import { UserSession, SystemRole, DepartmentInfo, LocationInfo } from '@/lib/typ
 import PerananLantikanSection from '@/components/PerananLantikanSection';
 import type { AccessPermission, IssuedCredentials, OfficerAccess, NewOfficerInput } from '@/lib/dataApi';
 import { dataApi } from '@/lib/dataApi';
-import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN } from '@/lib/systemRoles';
+import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN, BELUM_DILANTIK } from '@/lib/systemRoles';
 
 /** Ambang amaran lantikan bakal tamat (hari). */
 const HARI_AMARAN_LUPUT = 60;
@@ -234,7 +234,7 @@ export default function DirektoriSection({
     name: '',
     email: '',
     dept: '',
-    role: DEFAULT_JAWATAN,
+    role: '' as SystemRole | '',
     grade: '',
     phone: '',
     ext: '',
@@ -261,7 +261,7 @@ export default function DirektoriSection({
       name: '',
       email: '',
       dept: departments[0]?.id ?? '',
-      role: DEFAULT_JAWATAN,
+      role: '',
       grade: '',
       phone: '',
       ext: '',
@@ -280,7 +280,7 @@ export default function DirektoriSection({
       name: user.name,
       email: user.email,
       dept: user.dept,
-      role: (ROLE_LABELS_JAWATAN.includes(user.role as SystemRole) ? user.role : DEFAULT_JAWATAN) as SystemRole,
+      role: (ROLE_LABELS_JAWATAN.includes(user.role as SystemRole) ? user.role : '') as SystemRole | '',
       grade: user.grade || '',
       phone: user.phone || '',
       ext: user.ext || '',
@@ -321,7 +321,7 @@ export default function DirektoriSection({
       const { officer, credentials } = await onCreateOfficer({
         nama: formData.name.trim(),
         dept: formData.dept,
-        role: formData.role,
+        role: formData.role || undefined,
         gred: formData.grade.trim() || undefined,
         telefon: formData.phone.trim() || undefined,
         sambungan: formData.ext.trim() || undefined,
@@ -338,7 +338,7 @@ export default function DirektoriSection({
         name: '',
         email: '',
         dept: '',
-        role: DEFAULT_JAWATAN,
+        role: '',
         grade: '',
         phone: '',
         ext: '',
@@ -392,14 +392,16 @@ export default function DirektoriSection({
       return;
     }
 
-    const isJawatan = ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole);
+    const bolehTukarJawatan =
+      ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole) ||
+      editingUser.role === BELUM_DILANTIK;
 
     const updated: UserSession = {
       ...editingUser,
       name: formData.name.trim(),
       dept: formData.dept,
       // Peranan sistem (lantikan) tidak boleh diubah dari direktori.
-      role: isJawatan ? formData.role : editingUser.role,
+      role: bolehTukarJawatan ? formData.role || BELUM_DILANTIK : editingUser.role,
       grade: formData.grade.trim(),
       phone: formData.phone.trim() || undefined,
       ext: formData.ext.trim() || undefined,
@@ -706,9 +708,10 @@ export default function DirektoriSection({
                   className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-medium text-slate-700"
                 >
                   <option value="SEMUA">Semua Peranan Rasmi</option>
-                  {REGISTRATION_ROLES.map((r) => (
+                  {ROLE_LABELS_JAWATAN.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
+                  <option value={BELUM_DILANTIK}>{BELUM_DILANTIK}</option>
                 </select>
               </div>
 
@@ -1160,20 +1163,22 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Peranan Rasmi *
+                      Jawatan Hakiki (pilihan)
                     </label>
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
                       className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
                     >
+                      <option value="">— Belum dilantik (staf) —</option>
                       {REGISTRATION_ROLES.map((r) => (
                         <option key={r} value={r}>{r}</option>
                       ))}
                     </select>
                     <p className="text-[10px] text-amber-700 mt-1 font-medium">
-                      Lantikan <strong>Pegawai Pemeriksa (PP)</strong> dibuat melalui menu Peranan &amp; Lantikan
-                      (tempoh 24 bulan), bukan semasa pendaftaran.
+                      Semua pegawai didaftarkan dahulu sebagai staf. Peranan (KJ/KU, KP, PPAJ, Penyelia
+                      Lokasi, Pemeriksa) diberi kemudian melalui menu <strong>Peranan &amp; Lantikan</strong>{' '}
+                      mengikut polisi skop.
                     </p>
                   </div>
 
@@ -1401,9 +1406,11 @@ export default function DirektoriSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Jawatan Hakiki *
+                      Jawatan Hakiki
                     </label>
-                    {editingUser && !ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole) ? (
+                    {editingUser &&
+                    !ROLE_LABELS_JAWATAN.includes(editingUser.role as SystemRole) &&
+                    editingUser.role !== BELUM_DILANTIK ? (
                       <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2">
                         <p className="text-xs font-bold text-slate-800">{editingUser.role}</p>
                         <p className="mt-0.5 text-[10px] font-medium text-slate-500">
@@ -1416,6 +1423,7 @@ export default function DirektoriSection({
                         onChange={(e) => setFormData({ ...formData, role: e.target.value as SystemRole })}
                         className="w-full p-2.5 text-xs bg-amber-50 border border-amber-300 font-bold text-slate-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900"
                       >
+                        <option value="">— Belum dilantik (staf) —</option>
                         {REGISTRATION_ROLES.map((r) => (
                           <option key={r} value={r}>{r}</option>
                         ))}

@@ -9,6 +9,7 @@ import type {
   UserSession,
 } from '@/lib/types';
 import { dataApi } from '@/lib/dataApi';
+import { skopPolisi } from '@/lib/roleScopePolicy';
 
 interface AppointmentModalProps {
   mode: 'create' | 'renew';
@@ -60,6 +61,13 @@ export default function AppointmentModal({
   const selectedRole = useMemo(() => roles.find((role) => role.id === roleId), [roles, roleId]);
   const isRenew = mode === 'renew';
 
+  /** Skop yang dibenarkan oleh polisi peranan (cth. KJ/KU hanya Jabatan). */
+  const polisiSkop = useMemo(
+    () => skopPolisi(roleId, selectedRole?.scopeType as RoleScopeType | undefined),
+    [roleId, selectedRole]
+  );
+  const pilihanSkop = polisiSkop.dibenarkan;
+
   useEffect(() => {
     if (isRenew && initial) {
       setScopeType(initial.scopeType);
@@ -67,10 +75,10 @@ export default function AppointmentModal({
       return;
     }
     if (selectedRole) {
-      setScopeType(selectedRole.scopeType);
+      setScopeType(polisiSkop.lalai);
       setScopeId('');
     }
-  }, [selectedRole, isRenew, initial]);
+  }, [selectedRole, polisiSkop, isRenew, initial]);
 
   const autoTenureEnd =
     selectedRole?.defaultTenureMonths && validFrom
@@ -249,13 +257,16 @@ export default function AppointmentModal({
                   setScopeType(event.target.value as RoleScopeType);
                   setScopeId('');
                 }}
-                disabled={isRenew || Boolean(selectedRole)}
+                disabled={isRenew || pilihanSkop.length <= 1}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
               >
-                <option value="GLOBAL">Global</option>
-                <option value="DEPARTMENT">Jabatan</option>
-                <option value="LOCATION">Lokasi</option>
+                {pilihanSkop.map((skop) => (
+                  <option key={skop} value={skop}>
+                    {skop === 'GLOBAL' ? 'Global' : skop === 'DEPARTMENT' ? 'Jabatan / Unit' : 'Lokasi / Ruang'}
+                  </option>
+                ))}
               </select>
+              <p className="mt-1 text-[10px] font-medium text-slate-500">{polisiSkop.nota}</p>
             </div>
           </div>
 

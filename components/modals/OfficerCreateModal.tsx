@@ -28,7 +28,7 @@ export default function OfficerCreateModal({
   const [nama, setNama] = useState('');
   const [emel, setEmel] = useState('');
   const [dept, setDept] = useState(defaultDept || departments[0]?.id || '');
-  const [jawatan, setJawatan] = useState<SystemRole>(DEFAULT_JAWATAN);
+  const [jawatan, setJawatan] = useState<SystemRole | ''>('');
   const [telefon, setTelefon] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -67,7 +67,7 @@ export default function OfficerCreateModal({
       const result = await onCreate({
         nama: nama.trim(),
         dept,
-        role: jawatan,
+        role: jawatan || undefined,
         telefon: telefon.trim() || undefined,
         emel: cleanEmail || undefined,
       });
@@ -131,13 +131,14 @@ export default function OfficerCreateModal({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block font-semibold text-slate-700">
-                Jawatan <span className="text-rose-500">*</span>
+                Jawatan Hakiki <span className="font-normal text-slate-400">(pilihan)</span>
               </label>
               <select
                 value={jawatan}
                 onChange={(event) => setJawatan(event.target.value as SystemRole)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
+                <option value="">— Belum dilantik (staf) —</option>
                 {REGISTRATION_ROLES.map((role) => (
                   <option key={role} value={role}>
                     {role}
@@ -145,8 +146,8 @@ export default function OfficerCreateModal({
                 ))}
               </select>
               <p className="mt-1 text-[10px] font-medium text-amber-700">
-                Lantikan <strong>Pegawai Pemeriksa (PP)</strong> dibuat selepas pendaftaran (Peranan
-                &amp; Lantikan).
+                Pegawai didaftar dahulu sebagai staf; peranan diberi kemudian melalui Peranan &amp;
+                Lantikan.
               </p>
             </div>
 

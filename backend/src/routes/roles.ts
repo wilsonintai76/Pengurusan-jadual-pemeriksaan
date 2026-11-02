@@ -14,6 +14,25 @@ import { getAuthUser, requireRole, type AppEnv } from '../middleware/auth';
 const VALID_SCOPES: ScopeType[] = ['GLOBAL', 'DEPARTMENT', 'LOCATION'];
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * Polisi skop per peranan (selaras `lib/roleScopePolicy.ts` pada klien).
+ * Peranan jabatan hanya boleh berskop jabatan; peranan pentadbiran/pemeriksaan boleh
+ * memilih global atau berjabatan; Penyelia Lokasi sentiasa per-ruang.
+ */
+const ROLE_SCOPE_POLICY: Record<string, ScopeType[]> = {
+  KETUA_JABATAN: ['DEPARTMENT'],
+  KETUA_PROGRAM: ['DEPARTMENT'],
+  PEGAWAI_ASET: ['DEPARTMENT'],
+  PENOLONG_PEGAWAI_ASET: ['DEPARTMENT'],
+  PENYELIA_LOKASI: ['LOCATION'],
+  PEMERIKSA: ['GLOBAL', 'DEPARTMENT'],
+  PENTADBIR_SISTEM: ['GLOBAL', 'DEPARTMENT'],
+};
+
+function skopDibenarkan(roleId: string, fallback: ScopeType): ScopeType[] {
+  return ROLE_SCOPE_POLICY[roleId] ?? [fallback];
+}
+
 async function resolveOfficerId(
   db: AppEnv['Bindings']['DB'],
   officerId?: string | null,
@@ -108,6 +127,18 @@ export const roleAssignmentsRoute = new Hono<AppEnv>()
       if (!VALID_SCOPES.includes(scopeType)) {
         return c.json(
           { success: false, code: 'INVALID_SCOPE', message: `Skop '${scopeType}' tidak sah.` },
+          400
+        );
+      }
+
+      const dibenarkan = skopDibenarkan(roleId, definition.scopeType);
+      if (!dibenarkan.includes(scopeType)) {
+        return c.json(
+          {
+            success: false,
+            code: 'SCOPE_NOT_ALLOWED',
+            message: `Peranan '${definition.nama}' tidak boleh dilantik pada skop ${scopeType}. Skop dibenarkan: ${dibenarkan.join(', ')}.`,
+          },
           400
         );
       }

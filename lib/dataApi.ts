@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './apiConfig';
 import { UNAUTHORIZED_EVENT, authHeaders } from './authClient';
-import { normalizeRole } from './systemRoles';
+import { BELUM_DILANTIK, normalizeRole } from './systemRoles';
 import type {
   CycleAssignment,
   CycleDetail,
@@ -75,7 +75,8 @@ export interface AssetPayload {
 export interface NewOfficerInput {
   nama: string;
   dept: string;
-  role: string;
+  /** Kosong = daftar sebagai staf tanpa jawatan; peranan diberi kemudian. */
+  role?: string;
   gred?: string;
   telefon?: string;
   sambungan?: string;
@@ -190,7 +191,7 @@ function toUserSession(row: OfficerRow): UserSession {
     email: row.emel,
     name: row.nama,
     dept: row.dept,
-    role: normalizeRole(row.role),
+    role: row.role ? (normalizeRole(row.role) || row.role) : BELUM_DILANTIK,
     grade: row.gred ?? undefined,
     phone: row.telefon ?? undefined,
     ext: row.sambungan ?? undefined,
@@ -204,7 +205,8 @@ function toOfficerPayload(user: UserSession) {
     nama: user.name,
     emel: user.email,
     dept: user.dept,
-    role: user.role,
+    // "Belum Dilantik" bukan jawatan — hantar kosong supaya Worker menyimpan peranan kosong.
+    role: user.role === BELUM_DILANTIK ? '' : user.role,
     gred: user.grade,
     telefon: user.phone,
     sambungan: user.ext,

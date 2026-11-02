@@ -150,25 +150,27 @@ export const officersRoute = new Hono<AppEnv>()
         );
       }
 
-      const requestedJawatan = body.role || body.peranan || body.jawatan || null;
-      const jawatanId = resolveRoleId(requestedJawatan) ?? DEFAULT_JAWATAN_ID;
-      const jawatan = roleDefinition(jawatanId);
+      const requestedJawatan = String(body.role ?? body.peranan ?? body.jawatan ?? '').trim();
+      const jawatanId = requestedJawatan ? resolveRoleId(requestedJawatan) : null;
+      const jawatan = jawatanId ? roleDefinition(jawatanId) : null;
 
-      // Hanya JAWATAN boleh ditetapkan semasa pendaftaran. Lantikan (PP / Pentadbir
-      // Sistem) diberi melalui menu Peranan & Lantikan atau pendaftaran khas.
-      if (!jawatan || jawatan.kategori !== 'JAWATAN') {
+      // Pendaftaran tanpa jawatan dibenarkan: pegawai didaftarkan sebagai staf dan
+      // peranan diberi kemudian melalui Peranan & Lantikan mengikut polisi skop.
+      // Jika jawatan diberi, ia mesti salah satu JAWATAN hakiki (bukan lantikan).
+      if (requestedJawatan && (!jawatan || jawatan.kategori !== 'JAWATAN')) {
         return c.json(
           {
             success: false,
             code: 'APPOINTMENT_REQUIRED',
             message:
-              'Pegawai Pemeriksa (PP) ialah lantikan, bukan jawatan. Daftarkan pegawai dengan jawatan hakiki (contoh: Pensyarah / Pegawai Akademik), kemudian lantik sebagai pemeriksa melalui menu Peranan & Lantikan.',
+              'Pegawai Pemeriksa (PP) ialah lantikan, bukan jawatan. Daftarkan pegawai tanpa jawatan (atau dengan jawatan hakiki), kemudian lantik melalui menu Peranan & Lantikan.',
           },
           400
         );
       }
 
-      const role = jawatan.nama;
+      /** Label kosong bermaksud pegawai belum memegang jawatan. */
+      const role = jawatan ? jawatan.nama : '';
       const department = await resolveRegistrationDepartment(c.env.DB, String(body.dept), role);
       if (!department.departmentId) {
         return c.json(
@@ -255,7 +257,7 @@ export const officersRoute = new Hono<AppEnv>()
           id,
           String(body.nama).trim(),
           emel,
-          body.jawatan || role || 'Pegawai',
+          body.jawatan || role || 'Staf',
           body.gred || body.grade || '-',
           body.telefon || body.phone || null,
           body.sambungan || body.ext || null,
@@ -266,12 +268,15 @@ export const officersRoute = new Hono<AppEnv>()
         .run();
 
       // Lantikan PBAC awal supaya pegawai baharu terus memegang peranan skopnya.
-      await assignDefaultRoleForOfficer(c.env.DB, {
-        officerId: id,
-        roleValue: role,
-        departmentId,
-        createdById: getAuthUser(c)?.id ?? null,
-      });
+      // Pendaftaran tanpa jawatan tidak mencipta lantikan automatik.
+      if (jawatan) {
+        await assignDefaultRoleForOfficer(c.env.DB, {
+          officerId: id,
+          roleValue: role,
+          departmentId,
+          createdById: getAuthUser(c)?.id ?? null,
+        });
+      }
 
       // Kredensial dijana serta-merta; kata laluan hanya dipaparkan sekali kepada pentadbir.
       const credentials = await issueCredentials(c.env, id, emel, getAuthUser(c)?.id ?? null);
@@ -593,13 +598,17 @@ export const officersRoute = new Hono<AppEnv>()
       if (body.sambungan !== undefined) set('sambungan', body.sambungan);
       if (body.ext !== undefined) set('sambungan', body.ext);
       if (body.role !== undefined) {
-        const jawatanId = resolveRoleId(String(body.role));
+        const requested = String(body.role ?? '').trim();
+        const jawatanId = requested ? resolveRoleId(requested) : null;
         const jawatan = jawatanId ? roleDefinition(jawatanId) : null;
 
-        // Segerak profil (cth. selepas log masuk) menghantar nilai sedia ada —
-        // biarkan tanpa validasi jawatan supaya peranan sistem tidak ditolak.
-        if (jawatan && jawatan.nama === current.peranan) {
-          // tiada perubahan
+        if (!requested) {
+          // Kosong = tarik balik jawatan; pegawai kekal dalam direktori sebagai staf
+          // sehingga peranan diberi melalui Peranan & Lantikan.
+          set('peranan', '');
+        } else if (jawatan && jawatan.nama === current.peranan) {
+          // Segerak profil (cth. selepas log masuk) menghantar nilai sedia ada —
+          // biarkan tanpa validasi jawatan supaya peranan sistem tidak ditolak.
         } else if (!jawatan || jawatan.kategori !== 'JAWATAN') {
           return c.json(
             {
