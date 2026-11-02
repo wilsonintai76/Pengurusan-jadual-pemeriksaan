@@ -98,6 +98,19 @@ async function loadActiveRoles(
   return grouped;
 }
 
+/**
+ * Lampirkan senarai peranan aktif pada respons pegawai tunggal supaya klien
+ * tidak kehilangan `roles` selepas kemaskini (jadual sentiasa segerak).
+ */
+async function withRoles<T extends { id: string }>(
+  db: AppEnv['Bindings']['DB'],
+  row: T | null | undefined
+): Promise<(T & { roles: OfficerRoleRow[] }) | null> {
+  if (!row) return null;
+  const grouped = await loadActiveRoles(db, [row.id]);
+  return { ...row, roles: grouped.get(row.id) ?? [] };
+}
+
 export const officersRoute = new Hono<AppEnv>()
 
   // 1. LIST OFFICERS (optionally filtered by department)
@@ -278,9 +291,10 @@ export const officersRoute = new Hono<AppEnv>()
       // Kredensial dijana serta-merta; kata laluan hanya dipaparkan sekali kepada pentadbir.
       const credentials = await issueCredentials(c.env, id, emel, getAuthUser(c)?.id ?? null);
 
-      const saved = await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`)
-        .bind(id)
-        .first();
+      const saved = await withRoles(
+        c.env.DB,
+        await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`).bind(id).first()
+      );
 
       return c.json(
         {
@@ -407,7 +421,10 @@ export const officersRoute = new Hono<AppEnv>()
         createdById: auth.id,
       });
 
-      const saved = await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`).bind(id).first();
+      const saved = await withRoles(
+        c.env.DB,
+        await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`).bind(id).first()
+      );
 
       return c.json(
         {
@@ -534,9 +551,10 @@ export const officersRoute = new Hono<AppEnv>()
       }
 
       // Peranan utama kini diterbitkan automatik daripada lantikan aktif (tiada lajur pada officers).
-      const saved = await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`)
-        .bind(officer.id)
-        .first();
+      const saved = await withRoles(
+        c.env.DB,
+        await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`).bind(officer.id).first()
+      );
 
       return c.json({
         success: true,
@@ -622,9 +640,10 @@ export const officersRoute = new Hono<AppEnv>()
           .run();
       }
 
-      const saved = await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`)
-        .bind(current.id)
-        .first();
+      const saved = await withRoles(
+        c.env.DB,
+        await c.env.DB.prepare(`${OFFICER_SELECT} WHERE o.id = ?`).bind(current.id).first()
+      );
 
       return c.json({ success: true, message: 'Maklumat pegawai dikemaskini', data: saved });
     } catch (e: any) {

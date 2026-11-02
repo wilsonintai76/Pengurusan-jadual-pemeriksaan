@@ -379,7 +379,7 @@ export default function App() {
         setUsers((prev) => {
           const exists = prev.some((u) => u.email === saved.email);
           return exists
-            ? prev.map((u) => (u.email === saved.email ? saved : u))
+            ? prev.map((u) => (u.email === saved.email ? gabungPeranan(saved, u) : u))
             : [saved, ...prev];
         });
       })
@@ -402,15 +402,25 @@ export default function App() {
     showToast('Anda telah berjaya log keluar dari Portal Pengurusan Aset POLIKU.', 'info');
   };
 
+/**
+ * Respons kemaskini pegawai mungkin tidak membawa senarai peranan; kekalkan
+ * peranan sedia ada supaya penapis/statistik capaian tidak hilang sementara.
+ */
+const gabungPeranan = (baharu: UserSession, lama?: UserSession): UserSession =>
+  baharu.roles && baharu.roles.length > 0
+    ? baharu
+    : { ...baharu, roles: lama?.roles ?? [] };
+
   // User Directory CRUD handlers
   const handleUpdateUser = (updatedUser: UserSession) => {
     dataApi.officers
       .update(updatedUser)
       .then((saved) => {
         setUsers((prev) =>
-          prev.map((u) =>
-            updatedUser.id ? (u.id === updatedUser.id ? saved : u) : u.email === updatedUser.email ? saved : u
-          )
+          prev.map((u) => {
+            const sama = updatedUser.id ? u.id === updatedUser.id : u.email === updatedUser.email;
+            return sama ? gabungPeranan(saved, u) : u;
+          })
         );
 
         if (currentUser?.email === updatedUser.email) {
