@@ -26,14 +26,38 @@ import {
   KeyRound
 } from 'lucide-react';
 import { useDepartments } from '@/lib/useReferenceData';
-import { UserSession, SystemRole, DepartmentInfo, LocationInfo } from '@/lib/types';
-import PerananLantikanSection from '@/components/PerananLantikanSection';
+import { UserSession, SystemRole, DepartmentInfo, LocationInfo, RoleAssignment, RoleScopeType } from '@/lib/types';
 import type { AccessPermission, IssuedCredentials, OfficerAccess, NewOfficerInput } from '@/lib/dataApi';
 import { dataApi } from '@/lib/dataApi';
 import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN, BELUM_DILANTIK } from '@/lib/systemRoles';
 
 /** Ambang amaran lantikan bakal tamat (hari). */
 const HARI_AMARAN_LUPUT = 60;
+
+/** Peranan yang boleh ditanda terus dalam dialog pegawai (skop mengikut polisi). */
+const PERANAN_BOLEH_DITANDA: Array<{
+  id: string;
+  label: string;
+  ringkas: string;
+  scope: RoleScopeType;
+  nota: string;
+}> = [
+  { id: 'KETUA_JABATAN', label: 'Ketua Jabatan / Unit', ringkas: 'KJ/KU', scope: 'DEPARTMENT', nota: 'akses utama jabatan/unit' },
+  { id: 'KETUA_PROGRAM', label: 'Ketua Program', ringkas: 'KP', scope: 'DEPARTMENT', nota: 'akses utama jabatan/unit' },
+  { id: 'PEGAWAI_ASET', label: 'Pegawai Aset', ringkas: 'PA', scope: 'DEPARTMENT', nota: 'akses utama jabatan/unit' },
+  { id: 'PENOLONG_PEGAWAI_ASET', label: 'Penolong Pegawai Aset', ringkas: 'PPAJ/PPAU', scope: 'DEPARTMENT', nota: 'daftar pegawai & ruang jabatan' },
+  { id: 'PENYELIA_LOKASI', label: 'Penyelia Lokasi', ringkas: 'PL', scope: 'LOCATION', nota: 'wajib pilih ruang' },
+  { id: 'PEMERIKSA', label: 'Pegawai Pemeriksa', ringkas: 'PP', scope: 'GLOBAL', nota: 'wajib tarikh lantikan' },
+];
+
+const hariIni = () => new Date().toISOString().slice(0, 10);
+
+/** Tarikh tamat lantikan pemeriksa lalai — 24 bulan (1PP AM 2.4). */
+const tamatLalaiPemeriksa = (mula: string) => {
+  const d = new Date(`${mula || hariIni()}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + 24);
+  return d.toISOString().slice(0, 10);
+};
 
 /** Jumlah hari sebelum lantikan tamat (null = kekal / tiada tarikh). */
 const hariKeTamat = (validTo?: string | null): number | null => {
@@ -66,7 +90,7 @@ interface DirektoriSectionProps {
    */
   onCreateOfficer?: (
     input: NewOfficerInput
-  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials | null }>;
+  ) => Promise<{ officer: UserSession; credentials: IssuedCredentials | null; existing?: boolean }>;
   onResetCredentials?: (user: UserSession) => Promise<IssuedCredentials>;
   /** Tetapkan jawatan utama (memerlukan lantikan aktif bagi peranan itu). */
   onSetPrimaryRole?: (user: UserSession, roleId: string) => Promise<void>;
@@ -174,7 +198,7 @@ export default function DirektoriSection({
   const [issuedFor, setIssuedFor] = useState<string>('');
   const referenceDepartments = useDepartments();
   const departments = departmentsProp ?? referenceDepartments;
-  const [activeSubTab, setActiveSubTab] = useState<'crudTable' | 'roles'>('crudTable');
+  const [activeSubTab] = useState<'crudTable' | 'roles'>('crudTable');
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,6 +217,17 @@ export default function DirektoriSection({
   const [editingUser, setEditingUser] = useState<UserSession | null>(null);
   const [viewingUser, setViewingUser] = useState<UserSession | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserSession | null>(null);
+
+  // Tab dalam dialog pegawai: Maklumat | Peranan (tick)
+  const [tabDialog, setTabDialog] = useState<'maklumat' | 'peranan'>('maklumat');
+
+  // Penandaan peranan terus dalam dialog (tulis ke role_assignments)
+  const [lantikanSedia, setLantikanSedia] = useState<RoleAssignment[]>([]);
+  const [perananTanda, setPerananTanda] = useState<Record<string, boolean>>({});
+  const [ppMula, setPpMula] = useState(hariIni());
+  const [ppTamat, setPpTamat] = useState('');
+  const [plLokasi, setPlLokasi] = useState('');
+  const [ralatPeranan, setRalatPeranan] = useState('');
 
   // Capaian berkesan (PBAC) bagi pegawai yang sedang dilihat
   const [akses, setAkses] = useState<OfficerAccess | null>(null);
@@ -253,10 +288,112 @@ export default function DirektoriSection({
     }
   };
 
+  const resetPerananTanda = () => {
+    setLantikanSedia([]);
+    setPerananTanda({});
+    setPpMula(hariIni());
+    setPpTamat('');
+    setPlLokasi('');
+    setRalatPeranan('');
+  };
+
+  /** Baca lantikan aktif pegawai dan tandakan kotak yang berkaitan. */
+  const muatLantikan = async (user: UserSession) => {
+    const identifier = user.id || user.email;
+    try {
+      const senarai = await dataApi.roleAssignments.list({ officerId: identifier });
+      const aktif = senarai.filter((item) => item.status === 'AKTIF');
+      setLantikanSedia(aktif);
+
+      const tanda: Record<string, boolean> = {};
+      aktif.forEach((item) => {
+        tanda[item.roleId] = true;
+      });
+      setPerananTanda(tanda);
+
+      const pp = aktif.find((item) => item.roleId === 'PEMERIKSA');
+      setPpMula(pp?.validFrom ?? hariIni());
+      setPpTamat(pp?.validTo ?? '');
+
+      const pl = aktif.find((item) => item.roleId === 'PENYELIA_LOKASI');
+      setPlLokasi(pl?.scopeId ?? '');
+    } catch {
+      // Senarai lantikan gagal dibaca — borang maklumat masih boleh disimpan.
+    }
+  };
+
+  const togglePeranan = (roleId: string) => {
+    setRalatPeranan('');
+    setPerananTanda((prev) => {
+      const baharu = { ...prev, [roleId]: !prev[roleId] };
+      if (roleId === 'PEMERIKSA' && baharu[roleId] && !ppTamat) {
+        setPpTamat(tamatLalaiPemeriksa(ppMula));
+      }
+      return baharu;
+    });
+  };
+
+  /**
+   * Selaraskan `role_assignments` dengan kotak yang ditanda:
+   * tamatkan yang tidak ditanda / berubah, cipta yang baharu.
+   */
+  const simpanPeranan = async (officerId: string, jabatan: string): Promise<boolean> => {
+    if (perananTanda.PEMERIKSA && !ppMula) {
+      setRalatPeranan('Sila tetapkan tarikh lantikan Pegawai Pemeriksa.');
+      return false;
+    }
+    if (perananTanda.PENYELIA_LOKASI && !plLokasi) {
+      setRalatPeranan('Sila pilih ruang bagi Penyelia Lokasi.');
+      return false;
+    }
+
+    const skopUntuk = (roleId: string) => {
+      const opsi = PERANAN_BOLEH_DITANDA.find((item) => item.id === roleId);
+      if (!opsi) return { scopeType: 'DEPARTMENT' as RoleScopeType, scopeId: jabatan as string | undefined };
+      if (opsi.scope === 'LOCATION') return { scopeType: opsi.scope, scopeId: plLokasi || undefined };
+      if (opsi.scope === 'DEPARTMENT') return { scopeType: opsi.scope, scopeId: jabatan };
+      return { scopeType: opsi.scope, scopeId: undefined };
+    };
+
+    const berubah = (sedia: RoleAssignment, roleId: string) => {
+      if (roleId === 'PENYELIA_LOKASI') return (sedia.scopeId ?? '') !== plLokasi;
+      if (roleId === 'PEMERIKSA') return sedia.validFrom !== ppMula || (sedia.validTo ?? '') !== ppTamat;
+      return false;
+    };
+
+    for (const sedia of lantikanSedia) {
+      const ditanda = Boolean(perananTanda[sedia.roleId]);
+      if (!ditanda || berubah(sedia, sedia.roleId)) {
+        await dataApi.roleAssignments.end(sedia.id);
+      }
+    }
+
+    for (const opsi of PERANAN_BOLEH_DITANDA) {
+      if (!perananTanda[opsi.id]) continue;
+      const sedia = lantikanSedia.find((item) => item.roleId === opsi.id);
+      if (sedia && !berubah(sedia, opsi.id)) continue;
+
+      const skop = skopUntuk(opsi.id);
+      await dataApi.roleAssignments.create({
+        officerId,
+        role: opsi.id,
+        scopeType: skop.scopeType,
+        scopeId: skop.scopeId,
+        validFrom: opsi.id === 'PEMERIKSA' ? ppMula : undefined,
+        validTo: opsi.id === 'PEMERIKSA' ? ppTamat || undefined : undefined,
+        notes: 'Ditetapkan melalui Direktori Pegawai',
+      });
+    }
+
+    return true;
+  };
+
   // Open add modal
   const handleOpenAddModal = () => {
     setIssued(null);
     setIssuedFor('');
+    resetPerananTanda();
+    setTabDialog('maklumat');
     setFormData({
       name: '',
       email: '',
@@ -276,6 +413,9 @@ export default function DirektoriSection({
   // Open edit modal
   const handleOpenEditModal = (user: UserSession) => {
     setEditingUser(user);
+    setTabDialog('maklumat');
+    resetPerananTanda();
+    void muatLantikan(user);
     setFormData({
       name: user.name,
       email: user.email,
@@ -318,7 +458,7 @@ export default function DirektoriSection({
     setFormError('');
     setIsSaving(true);
     try {
-      const { officer, credentials } = await onCreateOfficer({
+      const { officer, credentials, existing } = await onCreateOfficer({
         nama: formData.name.trim(),
         dept: formData.dept,
         role: formData.role || undefined,
@@ -327,6 +467,17 @@ export default function DirektoriSection({
         sambungan: formData.ext.trim() || undefined,
         emel: email || undefined,
       });
+
+      // Tanda peranan yang dipilih hanya untuk pegawai baharu (elak menimpa lantikan sedia ada).
+      const adaTanda = PERANAN_BOLEH_DITANDA.some((opsi) => perananTanda[opsi.id]);
+      if (adaTanda && !existing) {
+        try {
+          await simpanPeranan(officer.id || officer.email, formData.dept);
+        } catch (error) {
+          setRalatPeranan((error as Error).message || 'Peranan gagal ditetapkan.');
+        }
+      }
+
       if (credentials) {
         setIssued(credentials);
         setIssuedFor(`${officer.name} (${officer.dept})`);
@@ -346,6 +497,7 @@ export default function DirektoriSection({
         programmeAssigned: '',
         status: 'Aktif',
       });
+      resetPerananTanda();
     } catch (error) {
       setFormError((error as Error).message || 'Pendaftaran pegawai gagal.');
     } finally {
@@ -384,11 +536,21 @@ export default function DirektoriSection({
   };
 
   // Submit Edit
-  const handleSaveEditUser = (e: React.FormEvent) => {
+  const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     if (!formData.name.trim()) {
       setFormError('Sila masukkan nama penuh pegawai.');
+      return;
+    }
+    if (perananTanda.PEMERIKSA && !ppMula) {
+      setRalatPeranan('Sila tetapkan tarikh lantikan Pegawai Pemeriksa.');
+      setTabDialog('peranan');
+      return;
+    }
+    if (perananTanda.PENYELIA_LOKASI && !plLokasi) {
+      setRalatPeranan('Sila pilih ruang bagi Penyelia Lokasi.');
+      setTabDialog('peranan');
       return;
     }
 
@@ -413,6 +575,16 @@ export default function DirektoriSection({
     if (onUpdateUser) {
       onUpdateUser(updated);
     }
+
+    try {
+      await simpanPeranan(editingUser.id || editingUser.email, formData.dept);
+      onRolesChanged?.();
+    } catch (error) {
+      setRalatPeranan((error as Error).message || 'Peranan gagal dikemas kini.');
+      setTabDialog('peranan');
+      return;
+    }
+
     setEditingUser(null);
   };
 
@@ -544,6 +716,106 @@ export default function DirektoriSection({
     (capaianFilter !== 'SEMUA' ? 1 : 0) +
     (searchQuery.trim() ? 1 : 0);
 
+  /**
+   * Panel penandaan peranan (checkbox) — dikongsi oleh dialog daftar & kemaskini.
+   * Skop ditetapkan automatik mengikut polisi; Pemeriksa perlu tarikh, PL perlu ruang.
+   */
+  const renderPerananTanda = () => (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        Tanda peranan yang dipegang pegawai ini. Skop ditetapkan automatik:{' '}
+        <strong>KJ/KU, KP, PA, PPAJ/PPAU</strong> → jabatan pegawai; <strong>PL</strong> → ruang yang
+        dipilih; <strong>PP</strong> → global (rakan silang), dengan tarikh lantikan.
+      </p>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {PERANAN_BOLEH_DITANDA.map((opsi) => {
+          const ditanda = Boolean(perananTanda[opsi.id]);
+          return (
+            <label
+              key={opsi.id}
+              className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2 transition ${
+                ditanda ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={ditanda}
+                onChange={() => togglePeranan(opsi.id)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+              />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold text-slate-900">
+                  {opsi.ringkas} · {opsi.label}
+                </span>
+                <span className="block text-[10px] text-slate-500">{opsi.nota}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
+      {perananTanda.PEMERIKSA && (
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-[10px] font-bold text-emerald-900">
+              Tarikh Lantikan Pemeriksa *
+            </label>
+            <input
+              type="date"
+              value={ppMula}
+              onChange={(e) => {
+                setPpMula(e.target.value);
+                if (!ppTamat) setPpTamat(tamatLalaiPemeriksa(e.target.value));
+              }}
+              className="w-full rounded-lg border border-emerald-200 px-2 py-1.5 font-mono text-[11px] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-bold text-emerald-900">
+              Tarikh Tamat (lalai 24 bulan)
+            </label>
+            <input
+              type="date"
+              value={ppTamat}
+              onChange={(e) => setPpTamat(e.target.value)}
+              className="w-full rounded-lg border border-emerald-200 px-2 py-1.5 font-mono text-[11px] focus:outline-none"
+            />
+          </div>
+        </div>
+      )}
+
+      {perananTanda.PENYELIA_LOKASI && (
+        <div className="rounded-xl border border-cyan-200 bg-cyan-50/60 p-3">
+          <label className="mb-1 block text-[10px] font-bold text-cyan-900">
+            Ruang Dipertanggungjawabkan *
+          </label>
+          <select
+            value={plLokasi}
+            onChange={(e) => setPlLokasi(e.target.value)}
+            className="w-full rounded-lg border border-cyan-200 px-2 py-1.5 text-[11px] focus:outline-none"
+          >
+            <option value="">— Pilih ruang —</option>
+            {locations
+              .filter((l) => !formData.dept || l.jabatan === formData.dept)
+              .map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.kodRuang} — {l.nama}
+                </option>
+              ))}
+          </select>
+          {locations.filter((l) => !formData.dept || l.jabatan === formData.dept).length === 0 && (
+            <p className="mt-1 text-[10px] font-semibold text-rose-600">
+              Tiada ruang berdaftar bagi jabatan ini — daftar di Direktori Lokasi dahulu.
+            </p>
+          )}
+        </div>
+      )}
+
+      {ralatPeranan && <p className="text-[11px] font-semibold text-rose-600">{ralatPeranan}</p>}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       
@@ -629,15 +901,10 @@ export default function DirektoriSection({
         </div>
       </div>
 
-      {/* 3. Sub-Tab Switcher: Jadual CRUD vs Matriks Silang */}
+      {/* 3. Jadual Direktori — peranan ditanda terus dalam borang pegawai */}
       <div className="flex border-b border-slate-200">
         <button
-          onClick={() => setActiveSubTab('crudTable')}
-          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition flex items-center gap-2 ${
-            activeSubTab === 'crudTable'
-              ? 'border-slate-900 text-slate-950 font-extrabold'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+          className="px-5 py-3 text-xs sm:text-sm font-bold border-b-2 border-slate-900 text-slate-950 font-extrabold transition flex items-center gap-2"
         >
           <Users className="w-4 h-4" />
           <span>Jadual Direktori Pegawai (CRUD)</span>
@@ -645,33 +912,8 @@ export default function DirektoriSection({
             {filteredUsers.length}
           </span>
         </button>
-
-
-
-        <button
-          onClick={() => setActiveSubTab('roles')}
-          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition flex items-center gap-2 ${
-            activeSubTab === 'roles'
-              ? 'border-slate-900 text-slate-950 font-extrabold'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4 text-indigo-600" />
-          <span>Peranan &amp; Lantikan</span>
-        </button>
       </div>
 
-      {activeSubTab === 'roles' && (
-        <PerananLantikanSection
-          officers={users}
-          departments={departments}
-          locations={locations}
-          canManage={canManage}
-          onShowToast={onShowToast ?? (() => undefined)}
-          onCreateOfficer={onCreateOfficer}
-          onChanged={onRolesChanged}
-        />
-      )}
 
       {activeSubTab === 'crudTable' && (
         <div className="space-y-4">
@@ -1298,6 +1540,13 @@ export default function DirektoriSection({
                 </div>
               )}
 
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                  Peranan &amp; Lantikan (pilihan)
+                </p>
+                {renderPerananTanda()}
+              </div>
+
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -1305,6 +1554,7 @@ export default function DirektoriSection({
                     setShowAddModal(false);
                     setIssued(null);
                     setIssuedFor('');
+                    resetPerananTanda();
                   }}
                   className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition"
                 >
@@ -1359,7 +1609,30 @@ export default function DirektoriSection({
             )}
 
             <form onSubmit={handleSaveEditUser} className="space-y-4">
-              <div className="space-y-3">
+              {/* Tab dalam dialog: Maklumat | Peranan */}
+              <div className="flex rounded-xl bg-slate-100 p-1 text-xs">
+                {([
+                  { id: 'maklumat', label: 'Maklumat' },
+                  { id: 'peranan', label: 'Peranan & Lantikan' },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setTabDialog(tab.id)}
+                    className={`flex-1 rounded-lg px-3 py-1.5 font-bold transition ${
+                      tabDialog === tab.id
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {tabDialog === 'peranan' && renderPerananTanda()}
+
+              <div className={`space-y-3 ${tabDialog === 'peranan' ? 'hidden' : ''}`}>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Nama Penuh & Gelaran Jawatan *

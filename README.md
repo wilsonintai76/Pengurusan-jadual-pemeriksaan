@@ -422,26 +422,38 @@ tersekat pada jabatan sendiri; `Penyelia Lokasi + PP` → tersekat pada lokasi s
 
 ## Skrin Pentadbir: Direktori Pegawai (termasuk Peranan & Lantikan)
 
-**Semua pengurusan pengguna dan lantikan berada dalam satu skrin: *Direktori Pegawai***, dengan
+**Semua pengurusan pengguna dan lantikan berada dalam satu skrin: *Direktori Pegawai*** — satu jadual
+CRUD, tanpa sub-tab berasingan.
 
-dua sub-tab — *Jadual Direktori Pegawai (CRUD)* dan *Peranan & Lantikan*.
+### Pendaftaran sebagai staf, peranan ditanda kemudian
+
+`POST /api/officers` menerima permintaan **tanpa** `role`: pegawai disimpan dengan `jawatan = 'Staf'`,
+`peranan` kosong dan **tiada lantikan automatik**. Paparan direktori menunjukkan **“Belum Dilantik”**
+(bukan lagi “Pensyarah / Pegawai Akademik” sebagai lalai) supaya staf pentadbiran juga terwakili.
+`PUT /api/officers/:id` dengan `role: ""` menarik balik jawatan.
+
+Peranan diberi melalui **kotak tanda** dalam dialog pegawai — tab **Peranan & Lantikan**
+(selari tab **Maklumat**), bukan lagi sub-tab di halaman:
+
+| Peranan | Skop automatik | Syarat tambahan |
+|---|---|---|
+| KJ/KU · KP · PA · PPAJ/PPAU | Jabatan/unit pegawai | — |
+| Penyelia Lokasi (PL) | Ruang (LOCATION) | wajib pilih ruang |
+| Pegawai Pemeriksa (PP) | Global (rakan silang) | wajib tarikh lantikan; tamat lalai 24 bulan |
+
+Menyimpan dialog akan **menyelaraskan** `role_assignments`: lantikan yang tidak ditanda atau berubah
+ditamatkan, yang baharu dicipta (termasuk pembaharuan PP apabila tarikh diubah). Polisi skop turut
+dikuatkuasakan pada Worker — `POST /api/role-assignments` memulangkan `400 SCOPE_NOT_ALLOWED` bagi
+kombinasi peranan/skop yang tidak dibenarkan.
 
 Matriks gandingan silang (⇄) kini berada di **Kitaran Pemeriksaan → Mod Pemeriksaan (⇄)**
 (`components/CrossPairMatrix.tsx`), dibaca daripada `departments.crossPartnerId` — bukan senarai
 berkod keras. Kitaran Pemeriksaan mempunyai dua sub-tab: *Kitaran & Pelan* (operasi kitaran) dan
 *Mod Pemeriksaan (⇄)* (rujukan gandingan jabatan).
 
-Sub-tab **Peranan & Lantikan** (`components/PerananLantikanSection.tsx`) memaparkan semua lantikan
-(pegawai, peranan, skop, tempoh, baki hari, status) dengan penapis carian/peranan/status.
+`components/modals/AppointmentModal.tsx` (tambah/perbaharui lantikan lanjutan) masih digunakan untuk
+kes khas seperti pembaharuan berjadual; pilihan skopnya juga dijana daripada polisi peranan.
 
-- Warna status: **AKTIF** (hijau), **LUPUT** (kuning — lantikan melepasi `valid_to` tetapi belum
-  ditamatkan), **DITAMATKAN** (merah).
-- **Tambah Lantikan** (`components/modals/AppointmentModal.tsx`): pilih pegawai → peranan → skop
-  (mengikut `scope_type` peranan: Global/Jabatan/Lokasi) → tarikh mula/tamat. Kosongkan tarikh tamat
-  untuk menggunakan tempoh lalai (24 bulan bagi `PEMERIKSA`).
-- **Perbaharui** mencipta baris baharu dan menutup baris lama; **Tamatkan** mengekalkan rekod sejarah.
-- Butang pengurusan hanya dipaparkan kepada pemegang `PENTADBIR_SISTEM`; Worker tetap menolak (403)
-  sebarang cubaan daripada peranan lain.
 
 ## Kitaran Pemeriksaan (Cycles)
 
