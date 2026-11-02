@@ -29,6 +29,39 @@ export interface IssuedCredentials {
   temporaryPassword: string;
 }
 
+/** Satu kebenaran dalam katalog PBAC. */
+export interface AccessPermission {
+  kunci: string;
+  label: string;
+  modul: string;
+  /** Peranan pemberi kuasa (kosong = kebenaran asas semua pengguna log masuk). */
+  melalui: string[];
+}
+
+/** Keputusan `GET /api/officers/:id/access`. */
+export interface OfficerAccess {
+  officer: {
+    id: string;
+    nama: string;
+    emel: string;
+    jawatan: string;
+    dept: string;
+    status: string;
+  };
+  peranan: Array<{
+    roleId: string;
+    roleName: string;
+    kategori: string;
+    scopeType: string;
+    scopeId: string | null;
+    validFrom: string;
+    validTo: string | null;
+  }>;
+  skop: { global: boolean; jabatan: string[]; lokasi: string[] };
+  kebenaran: AccessPermission[];
+  bakalLuput: number;
+}
+
 /** Aset KEW.PA-7 dihantar ke `PUT /api/locations/:id/assets` (menggantikan senarai lama). */
 export interface AssetPayload {
   noSiriPendaftaran: string;
@@ -313,9 +346,11 @@ export const dataApi = {
       });
       return toUserSession(row);
     },
+    /** Capaian berkesan (PBAC): peranan × skop × tempoh → senarai kebenaran. */
+    access: async (identifier: string): Promise<OfficerAccess> =>
+      apiFetch<OfficerAccess>(`/api/officers/${encodeURIComponent(identifier)}/access`),
     /** Jana semula kata laluan sementara bagi pegawai sedia ada (Pentadbir Sistem). */
-    resetCredentials: async (identifier: string): Promise<IssuedCredentials> => {
-      const { credentials } = await apiFetchEnvelope<unknown>(
+    resetCredentials: async (identifier: string): Promise<IssuedCredentials> => {      const { credentials } = await apiFetchEnvelope<unknown>(
         `/api/officers/${encodeURIComponent(identifier)}/credentials`,
         { method: 'POST' }
       );

@@ -7,8 +7,9 @@ import {
   issueCredentials,
 } from '../lib/credentials';
 import { DEFAULT_JAWATAN_ID, assignDefaultRoleForOfficer, hasActiveRole, resolveDisplayRole, resolveRoleId, roleDefinition } from '../lib/roles';
-import { getAuthUser, requireRole, type AppEnv } from '../middleware/auth';
+import { getAuthUser, requireAuth, requireRole, type AppEnv } from '../middleware/auth';
 import { canManageDepartment, loadManageScope } from '../lib/permissions';
+import { resolveAccess } from '../lib/access';
 import type { DB } from '../lib/db';
 
 /**
@@ -415,7 +416,45 @@ export const officersRoute = new Hono<AppEnv>()
     }
   })
 
-  // 2b. JANA SEMULA KATA LALUAN SEMENTARA (Pentadbir Sistem sahaja)
+  // 2b. CAPAIAN BERKESAN (PBAC) — peranan × skop × tempoh → senarai kebenaran
+  .get('/:id/access', requireAuth, async (c) => {
+    const identifier = c.req.param('id');
+    const auth = getAuthUser(c);
+
+    try {
+      const target = await c.env.DB.prepare(
+        'SELECT id, department_id AS dept FROM officers WHERE id = ? OR emel = ? COLLATE NOCASE LIMIT 1'
+      )
+        .bind(identifier, identifier)
+        .first<{ id: string; dept: string }>();
+
+      if (!target) {
+        return c.json({ success: false, message: 'Pegawai tidak dijumpai.' }, 404);
+      }
+
+      const sendiri = auth?.id === target.id || auth?.emel === identifier;
+      if (!sendiri && !(await bolehUrusPegawaiJabatan(c.env.DB, auth, target.dept))) {
+        return c.json(
+          {
+            success: false,
+            code: 'FORBIDDEN',
+            message: 'Akses ditolak: anda hanya boleh menyemak capaian pegawai jabatan anda sendiri.',
+          },
+          403
+        );
+      }
+
+      const access = await resolveAccess(c.env.DB, target.id);
+      if (!access) {
+        return c.json({ success: false, message: 'Pegawai tidak dijumpai.' }, 404);
+      }
+
+      return c.json({ success: true, data: access });
+    } catch (e: any) {
+      return c.json({ success: false, message: 'Gagal membaca capaian: ' + e.message }, 500);
+    }
+  })
+  // 2c. JANA SEMULA KATA LALUAN SEMENTARA (Pentadbir Sistem sahaja)
   .post('/:id/credentials', requireRole('PENTADBIR_SISTEM'), async (c) => {
     const identifier = c.req.param('id');
     try {

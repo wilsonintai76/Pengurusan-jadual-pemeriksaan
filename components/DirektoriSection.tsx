@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Users, 
   Search, 
@@ -28,7 +28,8 @@ import {
 import { useDepartments } from '@/lib/useReferenceData';
 import { UserSession, SystemRole, DepartmentInfo, LocationInfo } from '@/lib/types';
 import PerananLantikanSection from '@/components/PerananLantikanSection';
-import type { IssuedCredentials, NewOfficerInput } from '@/lib/dataApi';
+import type { AccessPermission, IssuedCredentials, OfficerAccess, NewOfficerInput } from '@/lib/dataApi';
+import { dataApi } from '@/lib/dataApi';
 import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN } from '@/lib/systemRoles';
 
 /** Ambang amaran lantikan bakal tamat (hari). */
@@ -192,6 +193,41 @@ export default function DirektoriSection({
   const [editingUser, setEditingUser] = useState<UserSession | null>(null);
   const [viewingUser, setViewingUser] = useState<UserSession | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserSession | null>(null);
+
+  // Capaian berkesan (PBAC) bagi pegawai yang sedang dilihat
+  const [akses, setAkses] = useState<OfficerAccess | null>(null);
+  const [aksesLoading, setAksesLoading] = useState(false);
+  const [aksesError, setAksesError] = useState('');
+
+  useEffect(() => {
+    if (!viewingUser) {
+      setAkses(null);
+      setAksesError('');
+      return;
+    }
+
+    let dibatalkan = false;
+    const identifier = viewingUser.id || viewingUser.email;
+    setAkses(null);
+    setAksesError('');
+    setAksesLoading(true);
+
+    dataApi.officers
+      .access(identifier)
+      .then((hasil) => {
+        if (!dibatalkan) setAkses(hasil);
+      })
+      .catch((error: unknown) => {
+        if (!dibatalkan) setAksesError((error as Error).message || 'Capaian gagal dibaca.');
+      })
+      .finally(() => {
+        if (!dibatalkan) setAksesLoading(false);
+      });
+
+    return () => {
+      dibatalkan = true;
+    };
+  }, [viewingUser]);
 
   // Form state for Add/Edit
   const [formData, setFormData] = useState({
@@ -1596,6 +1632,96 @@ export default function DirektoriSection({
                 <span className="text-slate-500">No. Tel Bimbit:</span>
                 <span className="font-mono text-slate-800">{viewingUser.phone || '—'}</span>
               </div>
+            </div>
+
+            {/* Capaian Berkesan (PBAC) */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Capaian Berkesan (PBAC)</span>
+                </div>
+                {akses?.skop && (
+                  <span className="text-[9px] font-mono font-bold rounded bg-slate-900 text-white px-1.5 py-0.5">
+                    {akses.skop.global
+                      ? 'SELURUH SISTEM'
+                      : `${akses.skop.jabatan.length} jabatan · ${akses.skop.lokasi.length} lokasi`}
+                  </span>
+                )}
+              </div>
+
+              {aksesLoading && (
+                <p className="text-[11px] text-slate-400">Membaca capaian daripada Worker…</p>
+              )}
+              {aksesError && (
+                <p className="text-[11px] font-semibold text-rose-600">{aksesError}</p>
+              )}
+
+              {akses && (
+                <>
+                  {akses.bakalLuput > 0 && (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800">
+                      {akses.bakalLuput} lantikan bakal tamat dalam {HARI_AMARAN_LUPUT} hari —
+                      perbaharui melalui tab Peranan &amp; Lantikan.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1">
+                    {akses.skop.jabatan.map((jabatan) => (
+                      <span
+                        key={`skop-jab-${jabatan}`}
+                        className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold font-mono text-amber-800"
+                      >
+                        JABATAN {jabatan}
+                      </span>
+                    ))}
+                    {akses.skop.lokasi.map((lokasi) => (
+                      <span
+                        key={`skop-lok-${lokasi}`}
+                        className="rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[9px] font-bold font-mono text-cyan-800"
+                      >
+                        {lokasi}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="space-y-1.5">
+                    {Object.entries(
+                      akses.kebenaran.reduce<Record<string, AccessPermission[]>>((acc, item) => {
+                        acc[item.modul] = [...(acc[item.modul] ?? []), item];
+                        return acc;
+                      }, {})
+                    ).map(([modul, senarai]) => (
+                      <div key={modul} className="flex items-start gap-2">
+                        <span className="w-[74px] shrink-0 text-[9px] font-extrabold uppercase tracking-wider text-slate-400 pt-0.5">
+                          {modul}
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {senarai.map((item) => (
+                            <span
+                              key={item.kunci}
+                              title={
+                                item.melalui.length
+                                  ? `Diberi oleh: ${item.melalui.join(', ')}`
+                                  : 'Kebenaran asas semua pengguna log masuk'
+                              }
+                              className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold ${
+                                item.melalui.length
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                  : 'border-slate-200 bg-slate-50 text-slate-500'
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-400">
+                    Kebenaran hijau diberi oleh lantikan; kelabu ialah kebenaran asas semua
+                    pengguna log masuk.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* PBAC Policy Notice */}

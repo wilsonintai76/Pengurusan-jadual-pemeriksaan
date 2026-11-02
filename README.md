@@ -254,6 +254,29 @@ peranan serentak, setiap satu dengan skop dan tempoh sendiri (`role_assignments`
 > (`assignDefaultRoleForOfficer`). Peranan berskop `LOCATION` bermula dengan skop jabatan sehingga
 > pentadbir menetapkan ruang sebenar.
 
+### Capaian berkesan (enjin kebenaran)
+
+`backend/src/lib/access.ts` memetakan **(peranan × skop × tempoh)** kepada senarai kebenaran yang
+boleh diaudit — satu sumber untuk UI dan semakan pada Worker:
+
+- `PERMISSION_CATALOG` — 16 kebenaran bernama (`lokasi.urus`, `jadual.tuntut`, `pemeriksaan.sah`, …)
+  dikelompokkan mengikut modul: Lokasi, Jadual, Pemeriksaan, Pegawai, Pentadbiran, Laporan.
+- `ROLE_PERMISSIONS` — pemetaan peranan → kebenaran, selaras dengan semakan sebenar
+  (`LOCATION_MANAGER_ROLES`, `bolehUrusPegawaiJabatan`, `evaluateVerification`, `requireRole(...)`).
+- `BASE_PERMISSIONS` — kebenaran asas semua pengguna log masuk (lihat direktori lokasi, jadual, laporan).
+- `resolvePermissions(roles)` — fungsi tulen, diuji tanpa pangkalan data (`access.test.ts`).
+- `resolveAccess(db, officerId)` — membaca pegawai + lantikan aktif, memulangkan peranan, skop
+  (GLOBAL / JABATAN / LOKASI) dan kebenaran berserta peranan punca (`melalui`).
+
+| Laluan | Kebenaran |
+|---|---|
+| `GET /api/officers/:id/access` | Perlu token; Pentadbir Sistem, PPAJ/PPAU jabatan berkenaan, atau pegawai itu sendiri |
+
+UI: **Direktori Pegawai → Lihat Profil Lengkap → Capaian Berkesan (PBAC)** memaparkan skop dan
+kebenaran (hijau = diberi lantikan, kelabu = kebenaran asas). Barisan penapis **Capaian PBAC** pada
+jadual utama menapis mengikut Pentadbir Sistem / Pegawai Pemeriksa / Penyelia Lokasi / Tiada lantikan /
+lantikan bakal luput (≤ 60 hari).
+
 ## Pelaksanaan Tugasan Pemeriksaan (PBAC Enforcement)
 
 ### Pendaftaran jadual: ruang + siri sahaja (3 sukuan)
