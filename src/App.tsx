@@ -71,13 +71,14 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const reloadFromD1 = async () => {
-    const [departmentList, officerList, locationList, scheduleList, logList, settingsData] =
+    // Muatan utama tidak boleh bergantung pada audit (khusus pentadbir): satu kegagalan
+    // tidak boleh menjatuhkan seluruh data.
+    const [departmentList, officerList, locationList, scheduleList, settingsData] =
       await Promise.all([
         dataApi.departments.list(),
         dataApi.officers.list(),
         dataApi.locations.list(),
         dataApi.schedules.list(),
-        dataApi.audit.list(),
         dataApi.settings.get(),
       ]);
 
@@ -85,8 +86,16 @@ export default function App() {
     setUsers(officerList);
     setLocations(locationList);
     setSchedules(scheduleList);
-    setAuditLogs(logList);
     setSettings(settingsData);
+  };
+
+  /** Jejak audit hanya untuk Pentadbir Sistem (API menolak peranan lain dengan 403). */
+  const reloadAuditLogs = async () => {
+    try {
+      setAuditLogs(await dataApi.audit.list());
+    } catch {
+      setAuditLogs([]);
+    }
   };
 
   useEffect(() => {
@@ -185,6 +194,16 @@ export default function App() {
         (!assignment.validTo || assignment.validTo >= today)
     );
   }, [myAssignments, currentUser?.role]);
+
+  // Jejak audit dimuat hanya apabila pengguna ialah Pentadbir Sistem.
+  useEffect(() => {
+    if (isSystemAdmin && currentUser) {
+      void reloadAuditLogs();
+    } else {
+      setAuditLogs([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSystemAdmin, currentUser?.email]);
 
   /** Jabatan yang boleh didaftar/dikemas kini pegawai oleh PPAJ/PPAU (skop sendiri). */
   const jabatanDiurusPegawai = useMemo(() => {
@@ -295,6 +314,11 @@ export default function App() {
     }
 
     showToast(`Selamat kembali, ${user.name} (${user.dept})`, 'success');
+
+    // Muat semula data dengan token baharu — muatan awal berlaku sebelum log masuk.
+    reloadFromD1().catch((error: Error) =>
+      showToast(`Gagal memuatkan data daripada Cloudflare D1: ${error.message}`, 'error')
+    );
 
     fetchAuthMeta().then((meta) => {
       setAppointment(meta?.appointment ?? null);
