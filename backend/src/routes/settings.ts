@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireRole, type AppEnv } from '../middleware/auth';
+import { getSecret, verifyToken } from '../lib/auth';
 import { Bindings, SystemSettingsRecord } from '../types';
 
 // Neutral baseline: no fabricated session dates. Year is resolved per request
@@ -20,6 +21,14 @@ const defaultSettings = (): SystemSettingsRecord => ({
 
 const KV_SETTINGS_KEY = 'system_settings';
 
+const PUBLIC_FIELDS = new Set([
+  'namaInstitusi',
+  'namaUnitAset',
+  'emelUnitAset',
+  'telefonUnitAset',
+  'sesiTahun',
+]);
+
 export const settingsRoute = new Hono<AppEnv>()
 
   // 1. GET SETTINGS (From Cloudflare KV) — awam: sesi/tahun diperlukan sebelum log masuk.
@@ -27,7 +36,18 @@ export const settingsRoute = new Hono<AppEnv>()
     try {
       const kvData = await c.env.KV.get(KV_SETTINGS_KEY, 'json');
       const baseline = defaultSettings();
-      const settings = kvData ? { ...baseline, ...(kvData as object) } : baseline;
+      const full = (kvData ? { ...baseline, ...(kvData as object) } : baseline) as Record<string, unknown>;
+
+      // Tanpa token sah: hanya medan paparan halaman landing.
+      let authed = false;
+      const secret = getSecret(c.env);
+      const header = c.req.header('authorization') ?? '';
+      if (secret && header.toLowerCase().startsWith('bearer ')) {
+        authed = (await verifyToken(header.slice(7).trim(), secret)) !== null;
+      }
+      const settings = authed
+        ? full
+        : Object.fromEntries(Object.entries(full).filter(([k]) => PUBLIC_FIELDS.has(k)));
 
       return c.json({
         success: true,
