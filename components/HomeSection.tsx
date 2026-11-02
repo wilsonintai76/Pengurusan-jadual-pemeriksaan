@@ -26,8 +26,7 @@ import {
   D3DepartmentBarChart, 
   D3AssetHealthChart 
 } from '@/components/charts/D3HomeCharts';
-import FullMonthCalendar from '@/components/calendar/FullMonthCalendar';
-import TakwimSesiCard from '@/components/TakwimSesiCard';
+import TakwimJadual from '@/components/TakwimJadual';
 import { formatTarikhMY } from '@/lib/tarikh';
 
 interface HomeSectionProps {
@@ -38,6 +37,8 @@ interface HomeSectionProps {
   onOpenPekeliling: () => void;
   /** Tahun sesi daripada tetapan (cth. "2026"). */
   tahunSesi?: string;
+  tarikhMulaSesi?: string;
+  tarikhTamatSesi?: string;
 }
 
 export default function HomeSection({
@@ -47,6 +48,8 @@ export default function HomeSection({
   onOpenClaim,
   onOpenPekeliling,
   tahunSesi,
+  tarikhMulaSesi,
+  tarikhTamatSesi,
 }: HomeSectionProps) {
   const [showOverdueToast, setShowOverdueToast] = React.useState<boolean>(true);
   const [calendarMode, setCalendarMode] = React.useState<'fullMonth' | 'urgent7Days'>('fullMonth');
@@ -391,9 +394,7 @@ export default function HomeSection({
       {/* 4. D3 Asset Health & Physical Condition Meter */}
       <D3AssetHealthChart schedules={schedules} />
 
-      {/* 4.4. Takwim perancangan sesi — makluman untuk semua pengguna (baca sahaja) */}
-      <TakwimSesiCard tahun={tahunAktif} />
-
+      {/* 4.4. Takwim sesi: sumber tunggal daripada Tetapan (tarikh sesi + takwim tahunan) dan jadual pemeriksaan */}
       {/* 4.5. Extended Takwim & Kalendar Pemeriksaan: Full-Month View & 7-Day Urgency Window */}
       <div className="space-y-4">
         
@@ -404,7 +405,7 @@ export default function HomeSection({
               <Calendar className="w-4 h-4" />
             </span>
             <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-              Takwim & Kalendar Pemeriksaan Aset Alih {tahunAktif}
+              Takwim Pemeriksaan Aset Alih {tahunAktif}
             </h3>
           </div>
 
@@ -419,7 +420,7 @@ export default function HomeSection({
               }`}
             >
               <CalendarDays className="w-4 h-4 text-amber-400" />
-              <span>Kalendar Bulanan Penuh (react-big-calendar)</span>
+              <span>Jadual Takwim</span>
             </button>
 
             <button
@@ -443,8 +444,11 @@ export default function HomeSection({
 
         {/* View 1: Full-Month Calendar View powered by react-big-calendar */}
         {calendarMode === 'fullMonth' && (
-          <FullMonthCalendar
+          <TakwimJadual
             schedules={schedules}
+            tahun={tahunAktif}
+            tarikhMulaSesi={tarikhMulaSesi}
+            tarikhTamatSesi={tarikhTamatSesi}
             onOpenEjas={onOpenEjas}
           />
         )}

@@ -925,6 +925,8 @@ export default function App() {
               }}
               onOpenPekeliling={() => setActiveTab('pekeliling')}
               tahunSesi={settings.sesiTahun}
+              tarikhMulaSesi={settings.tarikhMulaSesi}
+              tarikhTamatSesi={settings.tarikhTamatSesi}
             />
           )}
 
