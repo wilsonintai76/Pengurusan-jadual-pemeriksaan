@@ -44,6 +44,8 @@ export default function ScheduleModal({
   const [tarikhTamat, setTarikhTamat] = useState(schedule?.tarikhTamat || '');
   const [takwim, setTakwim] = useState<CalendarItem[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [pecahAras, setPecahAras] = useState(false);
+  const [arasRows, setArasRows] = useState<Array<{ nama: string; kuantiti: number }>>([]);
 
   useEffect(() => {
     let active = true;
@@ -88,6 +90,20 @@ export default function ScheduleModal({
   }, [isEdit, sasaran.siriDicadangkan]);
 
   const selectedLocation = locations.find((item) => item.id === lokasiId);
+  const jumlahLokasi = selectedLocation?.anggaranAset ?? 0;
+  const jumlahAras = arasRows.reduce((sum, row) => sum + (Number(row.kuantiti) || 0), 0);
+
+  /** Jana N aras dengan aset dibahagi sama rata (baki pada aras terakhir); boleh dilaras selepas itu. */
+  const janaAras = (bil: number) => {
+    const n = Math.max(1, Math.min(40, Math.floor(bil) || 1));
+    const asas = Math.floor(jumlahLokasi / n);
+    setArasRows(
+      Array.from({ length: n }, (_, i) => ({
+        nama: `Aras ${i + 1}`,
+        kuantiti: i === n - 1 ? jumlahLokasi - asas * (n - 1) : asas,
+      }))
+    );
+  };
   const ruangSiri = kiraRuangSiri(schedules, siri, jabatan);
 
   // Julat tarikh siri (bulan takwim) — tarikh rancangan wajib kekal dalam julat ini.
@@ -133,6 +149,18 @@ export default function ScheduleModal({
       return;
     }
 
+    if (pecahAras) {
+      const nama = arasRows.map((row) => row.nama.trim().toLowerCase());
+      if (arasRows.length === 0 || nama.some((n) => !n) || new Set(nama).size !== nama.length) {
+        setErrorMsg('Setiap aras mesti mempunyai nama yang unik.');
+        return;
+      }
+      if (jumlahLokasi > 0 && jumlahAras !== jumlahLokasi) {
+        setErrorMsg(`Jumlah aset aras (${jumlahAras}) mesti sama dengan jumlah KEW.PA-7 (${jumlahLokasi}).`);
+        return;
+      }
+    }
+
     onSave({
       jabatan,
       lokasiId: selectedLocation?.id,
@@ -140,6 +168,7 @@ export default function ScheduleModal({
       kodRuang: selectedLocation?.kodRuang,
       siri,
       catatan: catatan.trim(),
+      ...(pecahAras ? { arasList: arasRows.map((row) => ({ nama: row.nama.trim(), kuantiti: Number(row.kuantiti) || 0 })) } : {}),
     });
   };
 
@@ -380,6 +409,81 @@ export default function ScheduleModal({
                       : 'Belum Dilantik'}{' '}
                     · tarikh lalai {windowSiri(siri, takwim, Number(tahun)).label}
                   </p>
+                </div>
+              )}
+
+              {selectedLocation && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 space-y-2 text-[11px]">
+                  <label className="flex items-center gap-2 font-bold text-indigo-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={pecahAras}
+                      onChange={(e) => {
+                        setPecahAras(e.target.checked);
+                        if (e.target.checked && arasRows.length === 0) janaAras(2);
+                      }}
+                    />
+                    <span>Asrama/kamsis: pecahkan jadual mengikut aras</span>
+                  </label>
+
+                  {pecahAras && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 text-indigo-900">
+                        <span>Bilangan aras</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={40}
+                          value={arasRows.length || ''}
+                          onChange={(e) => janaAras(Number(e.target.value))}
+                          className="w-16 px-2 py-1 rounded-lg border border-indigo-200 bg-white font-mono"
+                        />
+                        <span className="text-indigo-700">
+                          Aset dibahagi sama rata; laraskan bilangan setiap aras jika perlu.
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {arasRows.map((row, index) => (
+                          <div key={index} className="grid grid-cols-[1fr_6rem] gap-2">
+                            <input
+                              type="text"
+                              value={row.nama}
+                              onChange={(e) =>
+                                setArasRows((prev) =>
+                                  prev.map((item, i) => (i === index ? { ...item, nama: e.target.value } : item))
+                                )
+                              }
+                              className="px-2 py-1 rounded-lg border border-indigo-200 bg-white"
+                              aria-label={`Nama aras ${index + 1}`}
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              value={row.kuantiti}
+                              onChange={(e) =>
+                                setArasRows((prev) =>
+                                  prev.map((item, i) =>
+                                    i === index ? { ...item, kuantiti: Number(e.target.value) } : item
+                                  )
+                                )
+                              }
+                              className="px-2 py-1 rounded-lg border border-indigo-200 bg-white font-mono text-right"
+                              aria-label={`Bilangan aset ${row.nama}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <p
+                        className={`font-bold ${
+                          jumlahLokasi > 0 && jumlahAras !== jumlahLokasi ? 'text-rose-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        Jumlah aras {jumlahAras} / KEW.PA-7 {jumlahLokasi}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 

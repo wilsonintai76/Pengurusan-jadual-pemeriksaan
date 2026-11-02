@@ -414,6 +414,17 @@ export const dataApi = {
       });
       return toSchedule(row);
     },
+    /** Asrama/kamsis: satu jadual bagi setiap aras pada lokasi (blok) yang sama. */
+    createAras: async (
+      schedule: Partial<InspectionSchedule>,
+      aras: Array<{ nama: string; kuantiti: number }>
+    ) => {
+      const rows = await apiFetch<InspectionSchedule[]>('/api/schedules', {
+        method: 'POST',
+        body: JSON.stringify({ ...schedule, aras }),
+      });
+      return rows.map(toSchedule);
+    },
     update: async (id: string, schedule: Partial<InspectionSchedule>) => {
       const row = await apiFetch<InspectionSchedule>(
         `/api/schedules/${encodeURIComponent(id)}`,

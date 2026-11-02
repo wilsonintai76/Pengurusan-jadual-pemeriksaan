@@ -47,6 +47,8 @@ export interface LocationRecord {
 export interface ScheduleRecord {
   id: string;
   kod: string;
+  aras?: string;
+  kuantitiLokasi?: number;
   jabatan: string;
   lokasi: string;
   kategori: string;

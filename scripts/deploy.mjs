@@ -105,6 +105,16 @@ if (!frontendOnly) {
         'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-10-30-kewpa11-pecahan.sql'
       );
     }
+    const scheduleColumns = run(
+      'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --json --command "PRAGMA table_info(inspection_schedules)"',
+      { capture: true }
+    );
+    if (!/"name"\s*:\s*"aras"/.test(scheduleColumns)) {
+      console.log('\u25b8 Migrasi: jadual mengikut aras (asrama/kamsis)\u2026');
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-11-02-schedule-aras.sql'
+      );
+    }
     console.log('▶ Migrasi skema D1 (remote)…');
     run(
       'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/schema.sql'

@@ -52,6 +52,12 @@ export interface InspectionSchedule {
   kod: string;
   /** Siri pemeriksaan 1/2/3 (sukuan) — satu ruang hanya dijadualkan sekali per sesi. */
   siri?: number;
+  /** Asrama/kamsis: aras pada blok (jadual dipecah mengikut aras). */
+  aras?: string;
+  /** Hanya untuk permintaan pendaftaran: pecahan aset setiap aras (asrama/kamsis). */
+  arasList?: Array<{ nama: string; kuantiti: number }>;
+  /** Jumlah aset seluruh lokasi (KEW.PA-7); `kuantiti` ialah bahagian aras ini. */
+  kuantitiLokasi?: number;
   /** Kod ruang direktori lokasi (untuk padanan jadual ↔ ruang). */
   kodRuang?: string;
   /** ID lokasi (untuk semakan aset / CSV KEW.PA-7). */

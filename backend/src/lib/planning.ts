@@ -603,12 +603,23 @@ async function writePlan(
     const members = membersByGroup.get(assignment.groupId) ?? [];
     const [pemeriksa1, pemeriksa2] = members;
 
-    const scheduleId = `JAD-${cycle.id.slice(-4)}-${assignment.locationId.slice(-6)}-${assignment.splitIndex}`;
+    let scheduleId = `JAD-${cycle.id.slice(-4)}-${assignment.locationId.slice(-6)}-${assignment.splitIndex}`;
 
-    const scheduleExists = await db
+    let scheduleExists = await db
       .prepare('SELECT id FROM inspection_schedules WHERE id = ? LIMIT 1')
       .bind(scheduleId)
       .first<{ id: string }>();
+
+    // Lokasi yang sudah dijadualkan secara manual (cth. jadual aras asrama) tidak digandakan.
+    if (!scheduleExists && assignment.splitIndex === 0) {
+      scheduleExists = await db
+        .prepare(
+          'SELECT id FROM inspection_schedules WHERE session_id = ? AND location_id = ? ORDER BY aras LIMIT 1'
+        )
+        .bind(cycle.sessionId, assignment.locationId)
+        .first<{ id: string }>();
+      if (scheduleExists) scheduleId = scheduleExists.id;
+    }
 
     if (!scheduleExists) {
       const departmentId = assignment.targetUnitId;

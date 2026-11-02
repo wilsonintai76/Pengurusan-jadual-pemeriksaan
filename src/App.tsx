@@ -622,13 +622,24 @@ export default function App() {
         })
         .catch((error: Error) => showToast(`Gagal mengemaskini jadual: ${error.message}`, 'error'));
     } else {
-      dataApi.schedules
-        .create(scheduleData)
-        .then((saved) => {
-          setSchedules((prev) => [saved, ...prev]);
-          showToast(`Jadual bagi ${saved.lokasi} berjaya didaftarkan.`, 'success');
-        })
-        .catch((error: Error) => showToast(`Gagal mendaftar jadual: ${error.message}`, 'error'));
+      const { arasList, ...payload } = scheduleData;
+      if (arasList && arasList.length > 0) {
+        dataApi.schedules
+          .createAras(payload, arasList)
+          .then((saved) => {
+            setSchedules((prev) => [...saved, ...prev]);
+            showToast(`${saved.length} jadual aras bagi ${saved[0]?.lokasi ?? ''} berjaya didaftarkan.`, 'success');
+          })
+          .catch((error: Error) => showToast(`Gagal mendaftar jadual aras: ${error.message}`, 'error'));
+      } else {
+        dataApi.schedules
+          .create(payload)
+          .then((saved) => {
+            setSchedules((prev) => [saved, ...prev]);
+            showToast(`Jadual bagi ${saved.lokasi} berjaya didaftarkan.`, 'success');
+          })
+          .catch((error: Error) => showToast(`Gagal mendaftar jadual: ${error.message}`, 'error'));
+      }
     }
 
     setShowScheduleModal(false);

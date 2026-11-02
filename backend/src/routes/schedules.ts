@@ -33,6 +33,8 @@ interface ScheduleRow {
   id: string;
   kod: string;
   siri: number | null;
+  aras: string | null;
+  kuantitiLokasi: number;
   kodRuang: string;
   locationId: string;
   latitude: number | null;
@@ -98,6 +100,8 @@ function mapSchedule(row: ScheduleRow): ScheduleRecord {
     id: row.id,
     kod: row.kod,
     siri: Number(row.siri) || 1,
+    aras: row.aras ?? undefined,
+    kuantitiLokasi: Number(row.kuantitiLokasi) || 0,
     kodRuang: row.kodRuang,
     locationId: row.locationId,
     latitude: row.latitude === null ? undefined : Number(row.latitude),
@@ -448,6 +452,105 @@ export const schedulesRoute = new Hono<AppEnv>()
         .all<{ tarikh: string; tajuk: string; kategori: string; catatan: string | null }>();
       const julat = windowUntukSiri(year, siri, takwimRows ?? []);
 
+      // Asrama/kamsis: satu jadual bagi setiap aras pada blok (lokasi kekal mengikut KEW.PA-7).
+      if (Array.isArray(body.aras) && body.aras.length > 0) {
+        const arasList = (body.aras as Array<{ nama?: unknown; kuantiti?: unknown }>).map((item) => ({
+          nama: String(item?.nama ?? '').trim(),
+          kuantiti: Number(item?.kuantiti),
+        }));
+        const names = arasList.map((item) => item.nama.toLowerCase());
+
+        if (
+          arasList.length > 40 ||
+          arasList.some((item) => !item.nama || !Number.isInteger(item.kuantiti) || item.kuantiti < 0) ||
+          new Set(names).size !== names.length
+        ) {
+          return c.json(
+            {
+              success: false,
+              code: 'INVALID_ARAS',
+              message: 'Setiap aras mesti mempunyai nama unik dan bilangan aset (integer, 0 atau lebih).',
+            },
+            400
+          );
+        }
+
+        const totalRow = await c.env.DB.prepare('SELECT COUNT(*) AS total FROM assets WHERE location_id = ?')
+          .bind(location.id)
+          .first<{ total: number }>();
+        const jumlahLokasi = Number(totalRow?.total) || 0;
+        const jumlahAras = arasList.reduce((sum, item) => sum + item.kuantiti, 0);
+
+        if (jumlahLokasi > 0 && jumlahAras !== jumlahLokasi) {
+          return c.json(
+            {
+              success: false,
+              code: 'ARAS_TOTAL_MISMATCH',
+              message: `Jumlah aset aras (${jumlahAras}) mesti sama dengan jumlah KEW.PA-7 bagi ${location.nama} (${jumlahLokasi}).`,
+            },
+            400
+          );
+        }
+
+        const base = await c.env.DB.prepare(
+          'SELECT COUNT(*) AS total FROM inspection_schedules WHERE department_id = ? AND session_id = ?'
+        )
+          .bind(location.departmentId, sessionId)
+          .first<{ total: number }>();
+        const stamp = Date.now().toString(36).toUpperCase();
+
+        const ids = arasList.map((_, index) => `JAD-${year}-${stamp}-${index + 1}`);
+        await c.env.DB.batch(
+          arasList.map((item, index) =>
+            c.env.DB.prepare(
+              `INSERT INTO inspection_schedules (
+                 id, session_id, kod, location_id, department_id, asset_category_id, siri,
+                 aras, kuantiti_aras, tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id,
+                 status_id, catatan, created_by_id
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`
+            ).bind(
+              ids[index],
+              sessionId,
+              `JAD/${location.departmentId}/${year}/${String((Number(base?.total) || 0) + index + 1).padStart(2, '0')}`,
+              location.id,
+              location.departmentId,
+              assetCategoryId,
+              siri,
+              item.nama,
+              item.kuantiti,
+              julat.mula,
+              julat.tamat,
+              statusId,
+              body.catatan || null,
+              auth.id
+            )
+          )
+        );
+
+        await recordAudit(c.env.DB, {
+          actorId: auth.id,
+          actorName: auth.emel,
+          actedAsRole: auth.role,
+          action: 'schedule:create',
+          departmentId: location.departmentId,
+          decision: 'PERMIT',
+          policyId: 'POL_INSPECTION_TASK_ASSIGNMENT',
+          resourceId: ids[0],
+          notes: `${arasList.length} jadual aras (${arasList.map((item) => item.nama).join(', ')}) bagi ${location.nama} didaftarkan (Siri ${siri}) — tarikh lalai ${julat.label}.`,
+        });
+
+        const saved = await Promise.all(ids.map((scheduleId) => findScheduleRow(c.env.DB, scheduleId)));
+
+        return c.json(
+          {
+            success: true,
+            message: `${arasList.length} jadual aras bagi ${location.nama} berjaya didaftarkan.`,
+            data: saved.filter((row): row is ScheduleRow => Boolean(row)).map(mapSchedule),
+          },
+          201
+        );
+      }
+
       const countRow = await c.env.DB.prepare(
         'SELECT COUNT(*) AS total FROM inspection_schedules WHERE department_id = ? AND session_id = ?'
       )
@@ -767,10 +870,12 @@ export const schedulesRoute = new Hono<AppEnv>()
         const report = body.laporanPraJkpak;
 
         // Bilangan aset ruang (KEW.PA-7) menentukan "Sedang Digunakan" (A) sebagai baki.
+        // Jadual aras asrama menggunakan bahagian aras itu sahaja.
         const assetCount = await c.env.DB.prepare(
-          'SELECT COUNT(*) AS total FROM assets WHERE location_id = ?'
+          `SELECT COALESCE(s.kuantiti_aras, (SELECT COUNT(*) FROM assets WHERE location_id = s.location_id)) AS total
+             FROM inspection_schedules s WHERE s.id = ?`
         )
-          .bind(current.location_id)
+          .bind(id)
           .first<{ total: number }>();
 
         const pecahan = normalizePecahan(report.pecahan, Number(assetCount?.total) || 0);

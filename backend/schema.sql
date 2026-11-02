@@ -165,6 +165,8 @@ CREATE TABLE IF NOT EXISTS inspection_schedules (
   department_id TEXT NOT NULL,               -- FK ke departments
   asset_category_id TEXT NOT NULL,           -- FK ke asset_categories
   siri INTEGER NOT NULL DEFAULT 1,           -- Siri pemeriksaan 1/2/3 (sukuan)
+  aras TEXT,                                 -- Asrama/kamsis: aras pada blok (NULL = seluruh lokasi)
+  kuantiti_aras INTEGER,                     -- Bilangan aset aras itu (dipecah daripada jumlah KEW.PA-7)
   tarikh_mula TEXT,                          -- NULL = belum ditetapkan oleh Penyelia Lokasi
   tarikh_tamat TEXT,                         -- NULL = belum ditetapkan oleh Penyelia Lokasi
   pemeriksa1_id TEXT,                        -- NULL = slot belum dituntut (self-assign pemeriksa)
@@ -188,8 +190,11 @@ CREATE TABLE IF NOT EXISTS inspection_schedules (
 CREATE INDEX IF NOT EXISTS idx_sched_loc ON inspection_schedules(location_id);
 CREATE INDEX IF NOT EXISTS idx_sched_dept ON inspection_schedules(department_id);
 CREATE INDEX IF NOT EXISTS idx_sched_status ON inspection_schedules(status_id);
--- Setiap ruang diperiksa SEKALI sahaja dalam satu sesi (Siri 1, 2 atau 3).
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sched_session_loc ON inspection_schedules(session_id, location_id);
+-- Setiap ruang diperiksa SEKALI sahaja dalam satu sesi; ruang asrama boleh dipecah
+-- kepada beberapa jadual mengikut aras (satu jadual bagi setiap aras).
+DROP INDEX IF EXISTS idx_sched_session_loc;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sched_session_loc_aras
+  ON inspection_schedules(session_id, location_id, COALESCE(aras, ''));
 
 -- --------------------------------------------------------------------
 -- 7. LAPORAN PEMERIKSAAN & PRA-JKPAK (3NF)
@@ -738,12 +743,14 @@ SELECT
   s.siri,
   s.department_id AS jabatan,
   s.location_id AS locationId,
-  loc.nama AS lokasi,
+  CASE WHEN s.aras IS NULL OR s.aras = '' THEN loc.nama ELSE loc.nama || ' – ' || s.aras END AS lokasi,
   loc.kod_ruang AS kodRuang,
   loc.latitude AS latitude,
   loc.longitude AS longitude,
   ac.nama AS kategori,
-  (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id) AS kuantiti,
+  (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id) AS kuantitiLokasi,
+  COALESCE(s.kuantiti_aras, (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id)) AS kuantiti,
+  s.aras AS aras,
   COALESCE(s.tarikh_mula, '') AS tarikhMula,
   COALESCE(s.tarikh_tamat, '') AS tarikhTamat,
   COALESCE(p1.nama, '') AS pemeriksa1,
