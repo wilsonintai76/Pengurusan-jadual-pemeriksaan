@@ -160,6 +160,27 @@ export default function App() {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
+  // Log keluar automatik selepas 30 minit tanpa aktiviti.
+  const loggedIn = currentUser !== null;
+  useEffect(() => {
+    if (!loggedIn) return;
+    const IDLE_MS = 30 * 60 * 1000;
+    let timer = window.setTimeout(expire, IDLE_MS);
+    function expire() {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
+    const reset = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(expire, IDLE_MS);
+    };
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [loggedIn]);
+
   const [activeTab, setActiveTab] = useState<
     | 'home'
     | 'ejas'
