@@ -31,6 +31,30 @@ import PerananLantikanSection from '@/components/PerananLantikanSection';
 import type { IssuedCredentials, NewOfficerInput } from '@/lib/dataApi';
 import { JAWATAN_ROLES, REGISTRATION_ROLES, ROLE_LABELS, ROLE_LABELS_JAWATAN, isRole, normalizeRole, roleIdOf, roleShort, DEFAULT_JAWATAN } from '@/lib/systemRoles';
 
+/** Ambang amaran lantikan bakal tamat (hari). */
+const HARI_AMARAN_LUPUT = 60;
+
+/** Jumlah hari sebelum lantikan tamat (null = kekal / tiada tarikh). */
+const hariKeTamat = (validTo?: string | null): number | null => {
+  if (!validTo) return null;
+  const tamat = new Date(`${validTo}T23:59:59`).getTime();
+  if (Number.isNaN(tamat)) return null;
+  return Math.ceil((tamat - Date.now()) / 86_400_000);
+};
+
+/** Lantikan (kuasa bertempoh) sahaja — jawatan hakiki bukan lantikan. */
+const lantikanPegawai = (user: UserSession) =>
+  (user.roles ?? []).filter((r) => r.kategori === 'LANTIKAN');
+
+const adaLantikan = (user: UserSession, roleId: string) =>
+  (user.roles ?? []).some((r) => r.roleId === roleId);
+
+const lantikanHampirLuput = (user: UserSession) =>
+  lantikanPegawai(user).some((r) => {
+    const hari = hariKeTamat(r.validTo);
+    return hari !== null && hari >= 0 && hari <= HARI_AMARAN_LUPUT;
+  });
+
 interface DirektoriSectionProps {
   currentUser?: UserSession | null;
   users?: UserSession[];
@@ -156,6 +180,10 @@ export default function DirektoriSection({
   const [roleFilter, setRoleFilter] = useState('SEMUA');
   const [deptFilter, setDeptFilter] = useState('SEMUA');
   const [statusFilter, setStatusFilter] = useState('SEMUA');
+  // Penapis berasaskan PBAC: lantikan aktif, skop & tempoh sah
+  const [capaianFilter, setCapaianFilter] = useState<
+    'SEMUA' | 'PENTADBIR' | 'PEMERIKSA' | 'PENYELIA' | 'TANPA_LANTIKAN' | 'AKAN_LUPUT'
+  >('SEMUA');
   const [sortBy, setSortBy] = useState<'name' | 'dept' | 'role' | 'grade'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -361,10 +389,24 @@ export default function DirektoriSection({
 
   // Export to CSV
   const handleExportCSV = () => {
-    let csv = 'Bil,Nama Pegawai,Emel,Jabatan,Peranan Rasmi,Gred,Telefon,Sambungan,Skop Tugas/Bilik,Status\n';
+    let csv = 'Bil,Nama Pegawai,Emel,Jabatan,Peranan Rasmi,Lantikan & Skop,Tarikh Luput Terdekat,Gred,Telefon,Sambungan,Skop Tugas/Bilik,Status\n';
     filteredUsers.forEach((u, i) => {
       const scope = u.roomAssigned || u.programmeAssigned || '-';
-      csv += `${i + 1},"${u.name}","${u.email}","${u.dept}","${u.role}","${u.grade || ''}","${u.phone || ''}","${u.ext || ''}","${scope}","${u.status || 'Aktif'}"\n`;
+      const lantikan =
+        lantikanPegawai(u)
+          .map(
+            (r) =>
+              `${roleShort(r.roleId)}${
+                r.scopeType === 'GLOBAL' ? '' : ` (${r.scopeType}${r.scopeId ? ` ${r.scopeId}` : ''})`
+              }`
+          )
+          .join('; ') || '-';
+      const luput =
+        lantikanPegawai(u)
+          .map((r) => r.validTo)
+          .filter((d): d is string => Boolean(d))
+          .sort()[0] ?? 'kekal';
+      csv += `${i + 1},"${u.name}","${u.email}","${u.dept}","${u.role}","${lantikan}","${luput}","${u.grade || ''}","${u.phone || ''}","${u.ext || ''}","${scope}","${u.status || 'Aktif'}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -385,6 +427,18 @@ export default function DirektoriSection({
 
   const multiRoleCount = useMemo(
     () => users.filter((user) => (user.roles ?? []).length > 1).length,
+    [users]
+  );
+
+  /** Kiraan pegawai mengikut jenis lantikan aktif (asas penapis PBAC). */
+  const capaianCounts = useMemo(
+    () => ({
+      pentadbir: users.filter((u) => adaLantikan(u, 'PENTADBIR_SISTEM')).length,
+      pemeriksa: users.filter((u) => adaLantikan(u, 'PEMERIKSA')).length,
+      penyelia: users.filter((u) => adaLantikan(u, 'PENYELIA_LOKASI')).length,
+      tanpaLantikan: users.filter((u) => lantikanPegawai(u).length === 0).length,
+      akanLuput: users.filter((u) => lantikanHampirLuput(u)).length,
+    }),
     [users]
   );
 
@@ -415,8 +469,20 @@ export default function DirektoriSection({
       const matchesRole = roleFilter === 'SEMUA' || normalizeRole(u.role) === roleFilter;
       const matchesDept = deptFilter === 'SEMUA' || u.dept === deptFilter;
       const matchesStatus = statusFilter === 'SEMUA' || (u.status || 'Aktif') === statusFilter;
+      const matchesCapaian =
+        capaianFilter === 'SEMUA'
+          ? true
+          : capaianFilter === 'PENTADBIR'
+            ? adaLantikan(u, 'PENTADBIR_SISTEM')
+            : capaianFilter === 'PEMERIKSA'
+              ? adaLantikan(u, 'PEMERIKSA')
+              : capaianFilter === 'PENYELIA'
+                ? adaLantikan(u, 'PENYELIA_LOKASI')
+                : capaianFilter === 'TANPA_LANTIKAN'
+                  ? lantikanPegawai(u).length === 0
+                  : lantikanHampirLuput(u);
 
-      return matchesQuery && matchesRole && matchesDept && matchesStatus;
+      return matchesQuery && matchesRole && matchesDept && matchesStatus && matchesCapaian;
     })
     .slice()
     .sort((a, b) => {
@@ -437,6 +503,7 @@ export default function DirektoriSection({
     (roleFilter !== 'SEMUA' ? 1 : 0) + 
     (deptFilter !== 'SEMUA' ? 1 : 0) + 
     (statusFilter !== 'SEMUA' ? 1 : 0) + 
+    (capaianFilter !== 'SEMUA' ? 1 : 0) +
     (searchQuery.trim() ? 1 : 0);
 
   return (
@@ -639,6 +706,51 @@ export default function DirektoriSection({
 
             </div>
 
+            {/* Penapis Capaian PBAC — lantikan, skop & tempoh sah */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                Capaian PBAC
+              </span>
+              {([
+                { id: 'SEMUA', label: 'Semua', count: users.length, tone: 'slate' },
+                { id: 'PENTADBIR', label: 'Pentadbir Sistem', count: capaianCounts.pentadbir, tone: 'rose' },
+                { id: 'PEMERIKSA', label: 'Pegawai Pemeriksa', count: capaianCounts.pemeriksa, tone: 'emerald' },
+                { id: 'PENYELIA', label: 'Penyelia Lokasi', count: capaianCounts.penyelia, tone: 'cyan' },
+                { id: 'TANPA_LANTIKAN', label: 'Tiada lantikan', count: capaianCounts.tanpaLantikan, tone: 'slate' },
+                { id: 'AKAN_LUPUT', label: `Luput ≤ ${HARI_AMARAN_LUPUT} hari`, count: capaianCounts.akanLuput, tone: 'amber' },
+              ] as const).map((chip) => {
+                const active = capaianFilter === chip.id;
+                const tones: Record<string, string> = {
+                  slate: 'border-slate-200 bg-slate-50 text-slate-700',
+                  rose: 'border-rose-200 bg-rose-50 text-rose-700',
+                  emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                  cyan: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+                  amber: 'border-amber-200 bg-amber-50 text-amber-800',
+                };
+                return (
+                  <button
+                    key={chip.id}
+                    onClick={() => setCapaianFilter(active ? 'SEMUA' : chip.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-bold transition ${
+                      active
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-2xs'
+                        : `${tones[chip.tone]} hover:border-slate-400`
+                    }`}
+                    title={`Tapis ${chip.label.toLowerCase()} (${chip.count} pegawai)`}
+                  >
+                    <span>{chip.label}</span>
+                    <span
+                      className={`rounded px-1 font-mono ${
+                        active ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
+                      }`}
+                    >
+                      {chip.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Active filters indicators & Sort controls */}
             <div className="flex flex-wrap items-center justify-between text-xs pt-2 border-t border-slate-100 gap-2">
               <div className="flex items-center gap-2 text-slate-500">
@@ -650,6 +762,7 @@ export default function DirektoriSection({
                       setRoleFilter('SEMUA');
                       setDeptFilter('SEMUA');
                       setStatusFilter('SEMUA');
+                      setCapaianFilter('SEMUA');
                     }}
                     className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline font-mono ml-2"
                   >
@@ -677,7 +790,7 @@ export default function DirektoriSection({
                   className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono text-[11px]"
                   title="Tukar tertib susunan"
                 >
-                  {sortOrder === 'asc' ? 'A &rarr; Z' : 'Z &rarr; A'}
+                  {sortOrder === 'asc' ? 'A → Z' : 'Z → A'}
                 </button>
               </div>
             </div>
@@ -783,6 +896,12 @@ export default function DirektoriSection({
                                     >
                                       + {roleShort(r.roleId)}
                                       {r.scopeType === 'LOCATION' && r.scopeId ? ` ${r.scopeId}` : ''}
+                                      {(() => {
+                                        const hari = hariKeTamat(r.validTo);
+                                        return hari !== null && hari >= 0 && hari <= HARI_AMARAN_LUPUT
+                                          ? ` ⏳${hari}h`
+                                          : '';
+                                      })()}
                                     </span>
                                   ))}
                               </div>
@@ -1393,6 +1512,12 @@ export default function DirektoriSection({
             </div>
 
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3 text-xs">
+              {lantikanHampirLuput(viewingUser) && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] font-bold text-amber-800">
+                  Lantikan bakal tamat dalam tempoh {HARI_AMARAN_LUPUT} hari — perbaharui melalui tab
+                  Peranan &amp; Lantikan sebelum tarikh luput.
+                </div>
+              )}
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
                 <span className="text-slate-500">Jawatan Utama:</span>
                 <span className="font-bold text-slate-900 font-mono">
