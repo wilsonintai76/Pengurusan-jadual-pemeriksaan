@@ -172,23 +172,15 @@ export default function FullMonthCalendar({
   return (
     <div className="space-y-4">
       
-      {/* 1. Resource Planning Dashboard Header & Filters */}
-      <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 border border-slate-800 shadow-sm space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-amber-300 border border-slate-700/80">
-              <CalendarDays className="w-3.5 h-3.5 text-amber-400" />
-              <span>Perancangan Sumber & Takwim Penuh (Sesi {currentYear})</span>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              <span>Paparan Kalendar Bulanan Inspect-Able:</span>
-              <span className="text-amber-400 underline decoration-amber-500/50">
-                {currentMonthName} {currentYear}
-              </span>
-            </h3>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Memaparkan keseluruhan jadual pemeriksaan fizikal merentas 12 jabatan sepanjang tahun 2026 bagi menyokong agihan beban tugas Pegawai Pemeriksa dan pematuhan jadual 1PP AM 2.4.
-            </p>
+      {/* 1. Bar ringkas: navigasi bulan, KPI dan tindakan dalam satu baris */}
+      <div className="bg-slate-900 text-white rounded-2xl px-4 py-3 border border-slate-800 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-extrabold">
+            <CalendarDays className="w-4 h-4 text-amber-400" />
+            <span className="text-amber-400">
+              {currentMonthName} {currentYear}
+            </span>
+            <span className="text-[11px] font-normal text-slate-400">· {events.length} jadual</span>
           </div>
 
           {/* Month Stepper & View Switcher */}
@@ -203,7 +195,19 @@ export default function FullMonthCalendar({
               </button>
 
               <span className="px-3 text-xs font-bold font-mono text-white min-w-[110px] text-center">
-                {currentMonthName.slice(0, 3)} {currentYear}
+                <select
+                  value={currentDate.getMonth()}
+                  onChange={(e) => handleJumpToMonth(Number(e.target.value))}
+                  className="bg-transparent text-white font-mono font-bold text-xs focus:outline-hidden cursor-pointer"
+                  aria-label="Pilih bulan"
+                >
+                  {MONTH_NAMES_MS.map((mName, mIdx) => (
+                    <option key={mName} value={mIdx} className="text-slate-900">
+                      {mName.slice(0, 3)}
+                    </option>
+                  ))}
+                </select>{' '}
+                {currentYear}
               </span>
 
               <button
@@ -232,75 +236,18 @@ export default function FullMonthCalendar({
           </div>
         </div>
 
-        {/* 2. Month Selector Pills for Year 2026 */}
-        <div className="pt-2 border-t border-slate-800/80">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-            <span className="font-mono uppercase font-bold text-slate-400">Pilih Bulan Takwim 2026:</span>
-            <span>{events.length} Jadual Aktif Dipaparkan</span>
-          </div>
-
-          <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
-            {MONTH_NAMES_MS.map((mName, mIdx) => {
-              const isSelected = currentDate.getMonth() === mIdx && currentDate.getFullYear() === 2026;
-              return (
-                <button
-                  key={mName}
-                  onClick={() => handleJumpToMonth(mIdx)}
-                  className={`py-1.5 px-2 rounded-xl text-center text-xs font-mono font-bold transition ${
-                    isSelected
-                      ? 'bg-amber-400 text-slate-950 shadow-xs'
-                      : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  {mName.slice(0, 3)}
-                </button>
-              );
-            })}
-          </div>
+        {/* 2. KPI ringkas */}
+        <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] font-mono">
+          <span className="text-slate-300">Jumlah <b className="text-white text-sm">{stats.total}</b></span>
+          <span className="text-emerald-400">Selesai <b className="text-sm">{stats.selesai}</b> <span className="text-slate-400">({stats.pct}%)</span></span>
+          <span className="text-amber-400">Sedang jalan <b className="text-sm">{stats.sedang}</b></span>
+          <span className="text-sky-400">Belum mula <b className="text-sm">{stats.belum}</b></span>
+          <span className="text-rose-400">Tertangguh <b className="text-sm">{stats.tertangguh}</b></span>
         </div>
-
-        {/* 3. Resource Planning KPI Bar */}
-        <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-slate-400 font-mono block">JUMLAH JADUAL</span>
-            <div className="text-base font-extrabold font-mono text-white">
-              {stats.total} <span className="text-[10px] text-slate-400 font-sans font-normal">lokasi</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-emerald-400 font-mono block">SELESAI AUDIT</span>
-            <div className="text-base font-extrabold font-mono text-emerald-400">
-              {stats.selesai} <span className="text-[10px] text-slate-400 font-sans font-normal">({stats.pct}%)</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-amber-400 font-mono block">SEDANG JALAN</span>
-            <div className="text-base font-extrabold font-mono text-amber-400">
-              {stats.sedang} <span className="text-[10px] text-slate-400 font-sans font-normal">lokasi</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-sky-400 font-mono block">BELUM MULA</span>
-            <div className="text-base font-extrabold font-mono text-sky-400">
-              {stats.belum} <span className="text-[10px] text-slate-400 font-sans font-normal">lokasi</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-            <span className="text-[10px] text-rose-400 font-mono block">TERTANGGUH</span>
-            <div className="text-base font-extrabold font-mono text-rose-400">
-              {stats.tertangguh} <span className="text-[10px] text-slate-400 font-sans font-normal">lokasi</span>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       {/* 4. Filter Toolbar for Calendar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-slate-500" />
@@ -367,8 +314,8 @@ export default function FullMonthCalendar({
       </div>
 
       {/* 5. React Big Calendar Render Container */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-2xs">
-        <div className="min-h-[620px] h-[640px]">
+      <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs">
+        <div className="h-[460px]">
           <Calendar
             localizer={localizer}
             events={events}

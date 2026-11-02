@@ -398,19 +398,14 @@ export default function HomeSection({
       <div className="space-y-4">
         
         {/* Calendar Mode Switcher & Resource Planning Header */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-200">
-                <Calendar className="w-4 h-4" />
-              </span>
-              <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">
-                Takwim & Kalendar Pemeriksaan Aset Alih {tahunAktif}
-              </h3>
-            </div>
-            <p className="text-xs text-slate-500">
-              Perancangan sumber manusia & jadual pemeriksaan fizikal 100% berpandukan 1PP AM 2.4.
-            </p>
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-200">
+              <Calendar className="w-4 h-4" />
+            </span>
+            <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+              Takwim & Kalendar Pemeriksaan Aset Alih {tahunAktif}
+            </h3>
           </div>
 
           {/* Mode Switcher Buttons */}
