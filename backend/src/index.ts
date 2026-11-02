@@ -93,8 +93,19 @@ app.use('/api/*', async (c, next) => {
 app.get('/api/public/stats', async (c) => {
   const count = async (table: string) =>
     (await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())?.n ?? 0;
+  // Unit bukan operasi (cth. SISTEM untuk akaun pentadbir) tidak dikira sebagai jabatan/unit.
+  const jabatanOperasi = async () =>
+    (
+      await c.env.DB.prepare(
+        `SELECT COUNT(*) AS n
+           FROM departments d
+           LEFT JOIN department_settings ds ON ds.department_id = d.id
+          WHERE COALESCE(ds.is_operational, 1) = 1`
+      ).first<{ n: number }>()
+    )?.n ?? 0;
+
   const [jabatan, lokasi, jadual, pegawai] = await Promise.all([
-    count('departments'),
+    jabatanOperasi(),
     count('locations'),
     count('inspection_schedules'),
     count('officers'),

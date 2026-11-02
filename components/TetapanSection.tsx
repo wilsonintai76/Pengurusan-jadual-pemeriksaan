@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   SlidersHorizontal, 
   Save, 
@@ -42,17 +42,50 @@ export default function TetapanSection({
   const [formData, setFormData] = useState<SystemSettings>({ ...settings });
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  // Segerakkan borang apabila tetapan dimuat semula daripada Worker (contoh: tukar tahun sesi
+  // di tempat lain atau muat semula selepas simpan), supaya tarikh yang disimpan sentiasa terpapar.
+  useEffect(() => {
+    setFormData({ ...settings });
+  }, [settings]);
+
+  /** Ada perubahan yang belum dihantar ke Worker? */
+  const kotor = useMemo(
+    () => JSON.stringify(formData) !== JSON.stringify(settings),
+    [formData, settings]
+  );
+
+  // Amaran sebelum menutup tab dengan perubahan yang belum disimpan.
+  useEffect(() => {
+    if (!kotor) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [kotor]);
 
   // Takwim dikawal selia oleh lantikan PENTADBIR_SISTEM (selaras `requireRole` pada Worker).
   const isAdmin =
     deriveManageScope(myAssignments).isAdmin || Boolean(currentUser?.role?.includes('Pentadbir'));
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    if (formData.tarikhMulaSesi && formData.tarikhTamatSesi && formData.tarikhMulaSesi > formData.tarikhTamatSesi) {
+      setFormError('Tarikh tamat sesi mesti selepas tarikh mula sesi.');
+      return;
+    }
+
+    setFormError('');
     onSaveSettings(formData);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
   };
+
+  const handleReset = () => setFormData({ ...settings });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,7 +130,7 @@ export default function TetapanSection({
             <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-800 flex items-center justify-center font-bold">
               <Calendar className="w-4 h-4" />
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-bold text-slate-900 text-sm sm:text-base">
                 1. Konfigurasi Sesi & Takwim Pemeriksaan
               </h3>
@@ -105,6 +138,21 @@ export default function TetapanSection({
                 Menetapkan tahun sesi aktif, jendela pelaksanaan, dan tarikh sasaran JKPAK.
               </p>
             </div>
+            {kotor ? (
+              <button
+                type="submit"
+                className="shrink-0 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Simpan tarikh sesi & takwim ke Cloudflare KV"
+              >
+                <Save className="w-3.5 h-3.5 text-slate-950" />
+                <span>Simpan</span>
+              </button>
+            ) : (
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+                <CheckCircle2 className="w-3 h-3" />
+                Tersimpan
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
@@ -152,6 +200,13 @@ export default function TetapanSection({
               <span className="text-[10px] text-slate-400 mt-0.5 block">Peringatan cip kuning/merah</span>
             </div>
           </div>
+
+          {formError && (
+            <p className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {formError}
+            </p>
+          )}
 
           <AnnualCalendarEditor
             tahun={formData.sesiTahun}
@@ -448,6 +503,31 @@ export default function TetapanSection({
         </div>
 
       </div>
+
+      {/* Bar perubahan belum disimpan — kekal kelihatan walaupun pengguna menatal jauh ke atas */}
+      {kotor && (
+        <div className="fixed z-40 left-3 right-3 bottom-20 lg:left-auto lg:right-6 lg:bottom-6 flex items-center justify-between gap-2 rounded-2xl border border-amber-300 bg-slate-900 px-3 py-2 shadow-xl">
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-amber-200">
+            <Clock className="w-3.5 h-3.5" />
+            Perubahan belum disimpan
+          </span>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:bg-slate-800"
+          >
+            Set Semula
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSubmit()}
+            className="flex items-center gap-1.5 rounded-lg bg-amber-400 px-3 py-1.5 text-[11px] font-bold text-slate-950 transition hover:bg-amber-300"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Simpan
+          </button>
+        </div>
+      )}
 
       {/* Confirmation Modal for Reset */}
       {showResetConfirm && (
