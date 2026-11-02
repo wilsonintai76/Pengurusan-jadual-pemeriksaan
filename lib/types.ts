@@ -54,8 +54,8 @@ export interface InspectionSchedule {
   siri?: number;
   /** Asrama/kamsis: aras pada blok (jadual dipecah mengikut aras). */
   aras?: string;
-  /** Hanya untuk permintaan pendaftaran: pecahan aset setiap aras (asrama/kamsis). */
-  arasList?: Array<{ nama: string; kuantiti: number }>;
+  /** Hanya untuk permintaan pendaftaran: kunci kumpulan aras asrama (satu jadual setiap kumpulan). */
+  kumpulanAras?: string[];
   /** Jumlah aset seluruh lokasi (KEW.PA-7); `kuantiti` ialah bahagian aras ini. */
   kuantitiLokasi?: number;
   /** Kod ruang direktori lokasi (untuk padanan jadual ↔ ruang). */
@@ -378,6 +378,9 @@ export interface LocationInfo {
   kategoriRuang: 'Makmal Komputer' | 'Bengkel Teknikal' | 'Bilik Kuliah' | 'Bilik Pelayan' | 'Stor & Arkib' | 'Pejabat Pentadbiran' | 'Studio' | 'Pusat Sumber';
   bangunan: string;
   aras: string;
+  /** Asrama: kunci blok+aras bilik ini (cth. `130101/BGN/ALA/01`); jadual dijana per kumpulan. */
+  kumpulanAras?: string;
+  kumpulanNama?: string;
   penjaga: string;
   penjagaJawatan?: string;
   penjagaEmel?: string;

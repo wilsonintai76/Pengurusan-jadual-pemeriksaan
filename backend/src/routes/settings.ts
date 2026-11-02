@@ -36,7 +36,7 @@ export const settingsRoute = new Hono<AppEnv>()
     try {
       const kvData = await c.env.KV.get(KV_SETTINGS_KEY, 'json');
       const baseline = defaultSettings();
-      const full = (kvData ? { ...baseline, ...(kvData as object) } : baseline) as Record<string, unknown>;
+      const full = (kvData ? { ...baseline, ...(kvData as object) } : baseline) as unknown as Record<string, unknown>;
 
       // Tanpa token sah: hanya medan paparan halaman landing.
       let authed = false;

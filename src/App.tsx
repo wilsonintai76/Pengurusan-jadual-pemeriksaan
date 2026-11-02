@@ -622,18 +622,17 @@ export default function App() {
         })
         .catch((error: Error) => showToast(`Gagal mengemaskini jadual: ${error.message}`, 'error'));
     } else {
-      const { arasList, ...payload } = scheduleData;
-      if (arasList && arasList.length > 0) {
+      if (scheduleData.kumpulanAras && scheduleData.kumpulanAras.length > 0) {
         dataApi.schedules
-          .createAras(payload, arasList)
+          .createKumpulan(scheduleData)
           .then((saved) => {
             setSchedules((prev) => [...saved, ...prev]);
-            showToast(`${saved.length} jadual aras bagi ${saved[0]?.lokasi ?? ''} berjaya didaftarkan.`, 'success');
+            showToast(`${saved.length} jadual aras berjaya didaftarkan.`, 'success');
           })
           .catch((error: Error) => showToast(`Gagal mendaftar jadual aras: ${error.message}`, 'error'));
       } else {
         dataApi.schedules
-          .create(payload)
+          .create(scheduleData)
           .then((saved) => {
             setSchedules((prev) => [saved, ...prev]);
             showToast(`Jadual bagi ${saved.lokasi} berjaya didaftarkan.`, 'success');

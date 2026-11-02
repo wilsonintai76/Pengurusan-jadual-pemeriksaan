@@ -87,6 +87,8 @@ CREATE TABLE IF NOT EXISTS locations (
   department_id TEXT NOT NULL,               -- FK ke departments
   building_id TEXT NOT NULL,                 -- FK ke buildings
   aras TEXT NOT NULL,                        -- cth: 'Aras 2', 'Aras Bawah'
+  kumpulan_aras TEXT,                        -- Asrama: kunci blok+aras, cth. '130101/BGN/ALA/01' (NULL = bukan asrama)
+  kumpulan_nama TEXT,                        -- Nama paparan kumpulan, cth. 'Asrama Lelaki Blok A Aras 1'
   category_id TEXT NOT NULL,                 -- FK ke room_categories
   status_id TEXT NOT NULL DEFAULT 'BELUM_MULA', -- FK ke inspection_statuses
   tarikh_terakhir_diperiksa TEXT,
@@ -679,6 +681,8 @@ SELECT
   rc.nama AS kategoriRuang,
   b.nama AS bangunan,
   l.aras,
+  l.kumpulan_aras AS kumpulanAras,
+  l.kumpulan_nama AS kumpulanNama,
   l.latitude,
   l.longitude,
   s.nama AS statusPemeriksaan,
@@ -743,13 +747,20 @@ SELECT
   s.siri,
   s.department_id AS jabatan,
   s.location_id AS locationId,
-  CASE WHEN s.aras IS NULL OR s.aras = '' THEN loc.nama ELSE loc.nama || ' – ' || s.aras END AS lokasi,
+  CASE WHEN s.aras IS NULL OR s.aras = '' THEN loc.nama ELSE COALESCE(loc.kumpulan_nama, loc.nama || ' – ' || s.aras) END AS lokasi,
   loc.kod_ruang AS kodRuang,
   loc.latitude AS latitude,
   loc.longitude AS longitude,
   ac.nama AS kategori,
   (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id) AS kuantitiLokasi,
-  COALESCE(s.kuantiti_aras, (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id)) AS kuantiti,
+  COALESCE(
+    s.kuantiti_aras,
+    CASE WHEN s.aras IS NULL OR s.aras = ''
+      THEN (SELECT COUNT(*) FROM assets a WHERE a.location_id = s.location_id)
+      ELSE (SELECT COUNT(*) FROM assets a JOIN locations lg ON lg.id = a.location_id WHERE lg.kumpulan_aras = s.aras)
+    END
+  ) AS kuantiti,
+  (SELECT COUNT(*) FROM locations lg WHERE lg.kumpulan_aras = s.aras AND s.aras <> '') AS bilBilik,
   s.aras AS aras,
   COALESCE(s.tarikh_mula, '') AS tarikhMula,
   COALESCE(s.tarikh_tamat, '') AS tarikhTamat,

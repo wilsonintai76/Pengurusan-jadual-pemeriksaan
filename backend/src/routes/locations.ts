@@ -3,6 +3,7 @@ import type { Bindings, LocationRecord, PegawaiBertanggungjawab } from '../types
 import type { DB, OfficerInput } from '../lib/db';
 import { getAuthUser, requireRole } from '../middleware/auth';
 import { canManageDepartment, canManageLocation, loadManageScope } from '../lib/permissions';
+import { kumpulanArasDaripadaKod } from '../lib/kumpulanAras';
 import {
   ensureBuildingId,
   ensureOfficerId,
@@ -24,6 +25,8 @@ interface LocationRow {
   kategoriRuang: string;
   bangunan: string;
   aras: string;
+  kumpulanAras: string | null;
+  kumpulanNama: string | null;
   latitude: number;
   longitude: number;
   statusPemeriksaan: string;
@@ -89,6 +92,8 @@ function mapLocation(row: LocationRow, officers: PegawaiBertanggungjawab[]): Loc
     kategoriRuang: row.kategoriRuang,
     bangunan: row.bangunan,
     aras: row.aras,
+    kumpulanAras: row.kumpulanAras ?? undefined,
+    kumpulanNama: row.kumpulanNama ?? undefined,
     penjaga: row.penjaga,
     penjagaJawatan: row.penjagaJawatan ?? undefined,
     penjagaEmel: row.penjagaEmel ?? undefined,
@@ -368,12 +373,14 @@ export const locationsRoute = new Hono<{ Bindings: Bindings }>()
       }
 
       const id = existing?.id || body.id || `LOK-${Date.now().toString(36).toUpperCase()}`;
+      const kumpulan = kumpulanArasDaripadaKod(normalisedCode, String(body.nama ?? ''));
 
       if (existing) {
         await c.env.DB.prepare(
           `UPDATE locations
               SET kod_ruang = ?, nama = ?, department_id = ?, building_id = ?, aras = ?,
-                  category_id = ?, latitude = ?, longitude = ?, updated_at = datetime('now')
+                  category_id = ?, latitude = ?, longitude = ?,
+                  kumpulan_aras = ?, kumpulan_nama = ?, updated_at = datetime('now')
             WHERE id = ?`
         )
           .bind(
@@ -385,6 +392,8 @@ export const locationsRoute = new Hono<{ Bindings: Bindings }>()
             categoryId,
             latitude,
             longitude,
+            kumpulan?.kunci ?? null,
+            kumpulan?.nama ?? null,
             id
           )
           .run();
@@ -392,8 +401,8 @@ export const locationsRoute = new Hono<{ Bindings: Bindings }>()
         await c.env.DB.prepare(
           `INSERT INTO locations (
             id, kod_ruang, nama, department_id, building_id, aras, category_id,
-            status_id, tarikh_terakhir_diperiksa, latitude, longitude
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            status_id, tarikh_terakhir_diperiksa, latitude, longitude, kumpulan_aras, kumpulan_nama
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
           .bind(
             id,
@@ -406,7 +415,9 @@ export const locationsRoute = new Hono<{ Bindings: Bindings }>()
             statusId,
             body.tarikhTerakhirDiperiksa || null,
             latitude,
-            longitude
+            longitude,
+            kumpulan?.kunci ?? null,
+            kumpulan?.nama ?? null
           )
           .run();
       }

@@ -414,14 +414,11 @@ export const dataApi = {
       });
       return toSchedule(row);
     },
-    /** Asrama/kamsis: satu jadual bagi setiap aras pada lokasi (blok) yang sama. */
-    createAras: async (
-      schedule: Partial<InspectionSchedule>,
-      aras: Array<{ nama: string; kuantiti: number }>
-    ) => {
+    /** Asrama/kamsis: satu jadual bagi setiap kumpulan blok + aras. */
+    createKumpulan: async (schedule: Partial<InspectionSchedule>) => {
       const rows = await apiFetch<InspectionSchedule[]>('/api/schedules', {
         method: 'POST',
-        body: JSON.stringify({ ...schedule, aras }),
+        body: JSON.stringify(schedule),
       });
       return rows.map(toSchedule);
     },

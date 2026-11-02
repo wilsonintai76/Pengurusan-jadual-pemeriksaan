@@ -44,8 +44,7 @@ export default function ScheduleModal({
   const [tarikhTamat, setTarikhTamat] = useState(schedule?.tarikhTamat || '');
   const [takwim, setTakwim] = useState<CalendarItem[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
-  const [pecahAras, setPecahAras] = useState(false);
-  const [arasRows, setArasRows] = useState<Array<{ nama: string; kuantiti: number }>>([]);
+  const [kumpulanDipilih, setKumpulanDipilih] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -67,7 +66,7 @@ export default function ScheduleModal({
     [locations, jabatan]
   );
 
-  /** Ruang yang belum mempunyai jadual dalam sesi semasa (satu ruang = satu jadual). */
+  /** Ruang biasa yang belum mempunyai jadual dalam sesi semasa (satu ruang = satu jadual). */
   const availableLocations = useMemo(() => {
     const terjadual = new Set(
       schedules
@@ -75,9 +74,29 @@ export default function ScheduleModal({
         .filter(Boolean)
     );
     return departmentLocations.filter((item) => {
+      if (item.kumpulanAras) return false;
       const key = (item.kodRuang || item.nama || '').trim().toUpperCase();
       return !terjadual.has(key);
     });
+  }, [departmentLocations, schedules]);
+
+  /** Asrama/kamsis: kumpulan blok + aras yang belum dijadualkan (bilik kekal sebagai lokasi). */
+  const availableGroups = useMemo(() => {
+    const sudah = new Set(schedules.map((row) => row.aras).filter(Boolean));
+    const map = new Map<string, { key: string; nama: string; bilik: number; aset: number }>();
+    departmentLocations.forEach((item) => {
+      if (!item.kumpulanAras || sudah.has(item.kumpulanAras)) return;
+      const current = map.get(item.kumpulanAras) ?? {
+        key: item.kumpulanAras,
+        nama: item.kumpulanNama || item.kumpulanAras,
+        bilik: 0,
+        aset: 0,
+      };
+      current.bilik += 1;
+      current.aset += item.anggaranAset ?? 0;
+      map.set(item.kumpulanAras, current);
+    });
+    return [...map.values()].sort((a, b) => a.nama.localeCompare(b.nama, 'ms', { numeric: true }));
   }, [departmentLocations, schedules]);
 
   const sasaran = useMemo(
@@ -90,20 +109,6 @@ export default function ScheduleModal({
   }, [isEdit, sasaran.siriDicadangkan]);
 
   const selectedLocation = locations.find((item) => item.id === lokasiId);
-  const jumlahLokasi = selectedLocation?.anggaranAset ?? 0;
-  const jumlahAras = arasRows.reduce((sum, row) => sum + (Number(row.kuantiti) || 0), 0);
-
-  /** Jana N aras dengan aset dibahagi sama rata (baki pada aras terakhir); boleh dilaras selepas itu. */
-  const janaAras = (bil: number) => {
-    const n = Math.max(1, Math.min(40, Math.floor(bil) || 1));
-    const asas = Math.floor(jumlahLokasi / n);
-    setArasRows(
-      Array.from({ length: n }, (_, i) => ({
-        nama: `Aras ${i + 1}`,
-        kuantiti: i === n - 1 ? jumlahLokasi - asas * (n - 1) : asas,
-      }))
-    );
-  };
   const ruangSiri = kiraRuangSiri(schedules, siri, jabatan);
 
   // Julat tarikh siri (bulan takwim) — tarikh rancangan wajib kekal dalam julat ini.
@@ -144,21 +149,22 @@ export default function ScheduleModal({
       setErrorMsg('Sila pilih jabatan / unit.');
       return;
     }
-    if (!lokasiId) {
-      setErrorMsg('Sila pilih ruang yang akan diperiksa.');
+    if (kumpulanDipilih.length === 0 && !lokasiId) {
+      setErrorMsg('Sila pilih ruang atau aras asrama yang akan diperiksa.');
       return;
     }
 
-    if (pecahAras) {
-      const nama = arasRows.map((row) => row.nama.trim().toLowerCase());
-      if (arasRows.length === 0 || nama.some((n) => !n) || new Set(nama).size !== nama.length) {
-        setErrorMsg('Setiap aras mesti mempunyai nama yang unik.');
-        return;
-      }
-      if (jumlahLokasi > 0 && jumlahAras !== jumlahLokasi) {
-        setErrorMsg(`Jumlah aset aras (${jumlahAras}) mesti sama dengan jumlah KEW.PA-7 (${jumlahLokasi}).`);
-        return;
-      }
+    if (kumpulanDipilih.length > 0) {
+      const wakil = locations.find((item) => item.kumpulanAras === kumpulanDipilih[0]);
+      onSave({
+        jabatan,
+        lokasiId: wakil?.id,
+        lokasi: wakil?.kumpulanNama || wakil?.nama || '',
+        siri,
+        catatan: catatan.trim(),
+        kumpulanAras: kumpulanDipilih,
+      });
+      return;
     }
 
     onSave({
@@ -168,7 +174,6 @@ export default function ScheduleModal({
       kodRuang: selectedLocation?.kodRuang,
       siri,
       catatan: catatan.trim(),
-      ...(pecahAras ? { arasList: arasRows.map((row) => ({ nama: row.nama.trim(), kuantiti: Number(row.kuantiti) || 0 })) } : {}),
     });
   };
 
@@ -412,77 +417,53 @@ export default function ScheduleModal({
                 </div>
               )}
 
-              {selectedLocation && (
+              {availableGroups.length > 0 && (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 space-y-2 text-[11px]">
-                  <label className="flex items-center gap-2 font-bold text-indigo-900 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pecahAras}
-                      onChange={(e) => {
-                        setPecahAras(e.target.checked);
-                        if (e.target.checked && arasRows.length === 0) janaAras(2);
-                      }}
-                    />
-                    <span>Asrama/kamsis: pecahkan jadual mengikut aras</span>
-                  </label>
-
-                  {pecahAras && (
-                    <>
-                      <div className="flex flex-wrap items-center gap-2 text-indigo-900">
-                        <span>Bilangan aras</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={40}
-                          value={arasRows.length || ''}
-                          onChange={(e) => janaAras(Number(e.target.value))}
-                          className="w-16 px-2 py-1 rounded-lg border border-indigo-200 bg-white font-mono"
-                        />
-                        <span className="text-indigo-700">
-                          Aset dibahagi sama rata; laraskan bilangan setiap aras jika perlu.
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        {arasRows.map((row, index) => (
-                          <div key={index} className="grid grid-cols-[1fr_6rem] gap-2">
-                            <input
-                              type="text"
-                              value={row.nama}
-                              onChange={(e) =>
-                                setArasRows((prev) =>
-                                  prev.map((item, i) => (i === index ? { ...item, nama: e.target.value } : item))
-                                )
-                              }
-                              className="px-2 py-1 rounded-lg border border-indigo-200 bg-white"
-                              aria-label={`Nama aras ${index + 1}`}
-                            />
-                            <input
-                              type="number"
-                              min={0}
-                              value={row.kuantiti}
-                              onChange={(e) =>
-                                setArasRows((prev) =>
-                                  prev.map((item, i) =>
-                                    i === index ? { ...item, kuantiti: Number(e.target.value) } : item
-                                  )
-                                )
-                              }
-                              className="px-2 py-1 rounded-lg border border-indigo-200 bg-white font-mono text-right"
-                              aria-label={`Bilangan aset ${row.nama}`}
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      <p
-                        className={`font-bold ${
-                          jumlahLokasi > 0 && jumlahAras !== jumlahLokasi ? 'text-rose-600' : 'text-emerald-700'
-                        }`}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-indigo-900">
+                      Asrama/kamsis: pilih aras (satu jadual bagi setiap aras)
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setKumpulanDipilih(
+                          kumpulanDipilih.length === availableGroups.length ? [] : availableGroups.map((g) => g.key)
+                        )
+                      }
+                      className="text-[10px] font-bold text-indigo-700 underline"
+                    >
+                      {kumpulanDipilih.length === availableGroups.length ? 'Kosongkan' : 'Pilih semua'}
+                    </button>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto space-y-1">
+                    {availableGroups.map((group) => (
+                      <label
+                        key={group.key}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-white border border-indigo-100 px-2.5 py-1.5 cursor-pointer"
                       >
-                        Jumlah aras {jumlahAras} / KEW.PA-7 {jumlahLokasi}
-                      </p>
-                    </>
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={kumpulanDipilih.includes(group.key)}
+                            onChange={(e) =>
+                              setKumpulanDipilih((prev) =>
+                                e.target.checked ? [...prev, group.key] : prev.filter((k) => k !== group.key)
+                              )
+                            }
+                          />
+                          <span className="font-semibold text-slate-800">{group.nama}</span>
+                        </span>
+                        <span className="font-mono text-slate-500">
+                          {group.bilik} bilik · {group.aset} aset
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {kumpulanDipilih.length > 0 && (
+                    <p className="font-bold text-indigo-900">
+                      {kumpulanDipilih.length} aras dipilih: jadual dijana serentak, aset dikira daripada KEW.PA-7
+                      semua bilik.
+                    </p>
                   )}
                 </div>
               )}

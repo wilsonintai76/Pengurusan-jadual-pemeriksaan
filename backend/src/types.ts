@@ -29,6 +29,8 @@ export interface LocationRecord {
   kategoriRuang: string;
   bangunan: string;
   aras: string;
+  kumpulanAras?: string;
+  kumpulanNama?: string;
   penjaga: string;
   penjagaJawatan?: string;
   penjagaEmel?: string;

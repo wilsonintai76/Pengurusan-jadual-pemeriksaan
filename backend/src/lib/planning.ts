@@ -614,9 +614,13 @@ async function writePlan(
     if (!scheduleExists && assignment.splitIndex === 0) {
       scheduleExists = await db
         .prepare(
-          'SELECT id FROM inspection_schedules WHERE session_id = ? AND location_id = ? ORDER BY aras LIMIT 1'
+          `SELECT id FROM inspection_schedules
+            WHERE session_id = ?
+              AND (location_id = ?
+                   OR (aras IS NOT NULL AND aras = (SELECT kumpulan_aras FROM locations WHERE id = ?)))
+            ORDER BY aras LIMIT 1`
         )
-        .bind(cycle.sessionId, assignment.locationId)
+        .bind(cycle.sessionId, assignment.locationId, assignment.locationId)
         .first<{ id: string }>();
       if (scheduleExists) scheduleId = scheduleExists.id;
     }

@@ -416,16 +416,24 @@ export const schedulesRoute = new Hono<AppEnv>()
       const year = new Date().getFullYear();
       const sessionId = await ensureSessionId(c.env.DB, `${year}-01-01`);
 
-      // Satu ruang = satu jadual per sesi (Siri 1, 2 ATAU 3 sahaja).
-      const existing = await c.env.DB.prepare(
-        `SELECT s.id, s.kod, s.siri
-           FROM inspection_schedules s
-           JOIN inspection_sessions ss ON ss.id = s.session_id
-          WHERE ss.tahun = ? AND s.location_id = ?
-          LIMIT 1`
-      )
-        .bind(year, location.id)
-        .first<{ id: string; kod: string; siri: number }>();
+      const kumpulanKeys: string[] = Array.isArray(body.kumpulanAras)
+        ? (body.kumpulanAras as unknown[]).map((key) => String(key ?? '').trim()).filter(Boolean)
+        : [];
+
+      // Satu ruang = satu jadual per sesi (Siri 1, 2 ATAU 3 sahaja). Mod kumpulan aras
+      // (asrama) disemak per kumpulan di bawah.
+      const existing =
+        kumpulanKeys.length > 0
+          ? null
+          : await c.env.DB.prepare(
+              `SELECT s.id, s.kod, s.siri
+                 FROM inspection_schedules s
+                 JOIN inspection_sessions ss ON ss.id = s.session_id
+                WHERE ss.tahun = ? AND s.location_id = ?
+                LIMIT 1`
+            )
+              .bind(year, location.id)
+              .first<{ id: string; kod: string; siri: number }>();
 
       if (existing) {
         return c.json(
@@ -452,44 +460,57 @@ export const schedulesRoute = new Hono<AppEnv>()
         .all<{ tarikh: string; tajuk: string; kategori: string; catatan: string | null }>();
       const julat = windowUntukSiri(year, siri, takwimRows ?? []);
 
-      // Asrama/kamsis: satu jadual bagi setiap aras pada blok (lokasi kekal mengikut KEW.PA-7).
-      if (Array.isArray(body.aras) && body.aras.length > 0) {
-        const arasList = (body.aras as Array<{ nama?: unknown; kuantiti?: unknown }>).map((item) => ({
-          nama: String(item?.nama ?? '').trim(),
-          kuantiti: Number(item?.kuantiti),
-        }));
-        const names = arasList.map((item) => item.nama.toLowerCase());
-
-        if (
-          arasList.length > 40 ||
-          arasList.some((item) => !item.nama || !Number.isInteger(item.kuantiti) || item.kuantiti < 0) ||
-          new Set(names).size !== names.length
-        ) {
-          return c.json(
-            {
-              success: false,
-              code: 'INVALID_ARAS',
-              message: 'Setiap aras mesti mempunyai nama unik dan bilangan aset (integer, 0 atau lebih).',
-            },
-            400
-          );
+      // Asrama/kamsis: satu jadual bagi setiap kumpulan blok + aras. Bilik kekal sebagai
+      // lokasi KEW.PA-7; jadual mewakili semua bilik dalam aras itu.
+      if (kumpulanKeys.length > 0) {
+        const unik = [...new Set(kumpulanKeys)];
+        if (unik.length > 40) {
+          return c.json({ success: false, code: 'INVALID_ARAS', message: 'Terlalu banyak aras (maksimum 40).' }, 400);
         }
 
-        const totalRow = await c.env.DB.prepare('SELECT COUNT(*) AS total FROM assets WHERE location_id = ?')
-          .bind(location.id)
-          .first<{ total: number }>();
-        const jumlahLokasi = Number(totalRow?.total) || 0;
-        const jumlahAras = arasList.reduce((sum, item) => sum + item.kuantiti, 0);
+        const plan: Array<{ key: string; nama: string; repId: string }> = [];
+        for (const key of unik) {
+          const { results: bilik } = await c.env.DB.prepare(
+            `SELECT id, department_id AS departmentId, kumpulan_nama AS nama
+               FROM locations WHERE kumpulan_aras = ? ORDER BY kod_ruang ASC`
+          )
+            .bind(key)
+            .all<{ id: string; departmentId: string; nama: string | null }>();
 
-        if (jumlahLokasi > 0 && jumlahAras !== jumlahLokasi) {
-          return c.json(
-            {
-              success: false,
-              code: 'ARAS_TOTAL_MISMATCH',
-              message: `Jumlah aset aras (${jumlahAras}) mesti sama dengan jumlah KEW.PA-7 bagi ${location.nama} (${jumlahLokasi}).`,
-            },
-            400
-          );
+          if (!bilik || bilik.length === 0) {
+            return c.json(
+              { success: false, code: 'UNKNOWN_ARAS', message: `Kumpulan aras '${key}' tidak dijumpai.` },
+              400
+            );
+          }
+          if (bilik.some((room) => room.departmentId !== location.departmentId)) {
+            return c.json(
+              {
+                success: false,
+                code: 'DEPARTMENT_FORBIDDEN',
+                message: `Bilik dalam ${key} bukan semuanya milik jabatan ${location.departmentId}.`,
+              },
+              403
+            );
+          }
+
+          const sudah = await c.env.DB.prepare(
+            'SELECT kod FROM inspection_schedules WHERE session_id = ? AND aras = ? LIMIT 1'
+          )
+            .bind(sessionId, key)
+            .first<{ kod: string }>();
+          if (sudah) {
+            return c.json(
+              {
+                success: false,
+                code: 'ALREADY_SCHEDULED',
+                message: `${bilik[0].nama ?? key} sudah dijadualkan (${sudah.kod}).`,
+              },
+              409
+            );
+          }
+
+          plan.push({ key, nama: bilik[0].nama ?? key, repId: bilik[0].id });
         }
 
         const base = await c.env.DB.prepare(
@@ -498,26 +519,24 @@ export const schedulesRoute = new Hono<AppEnv>()
           .bind(location.departmentId, sessionId)
           .first<{ total: number }>();
         const stamp = Date.now().toString(36).toUpperCase();
+        const ids = plan.map((_, index) => `JAD-${year}-${stamp}-${index + 1}`);
 
-        const ids = arasList.map((_, index) => `JAD-${year}-${stamp}-${index + 1}`);
         await c.env.DB.batch(
-          arasList.map((item, index) =>
+          plan.map((item, index) =>
             c.env.DB.prepare(
               `INSERT INTO inspection_schedules (
-                 id, session_id, kod, location_id, department_id, asset_category_id, siri,
-                 aras, kuantiti_aras, tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id,
-                 status_id, catatan, created_by_id
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`
+                 id, session_id, kod, location_id, department_id, asset_category_id, siri, aras,
+                 tarikh_mula, tarikh_tamat, pemeriksa1_id, pemeriksa2_id, status_id, catatan, created_by_id
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`
             ).bind(
               ids[index],
               sessionId,
               `JAD/${location.departmentId}/${year}/${String((Number(base?.total) || 0) + index + 1).padStart(2, '0')}`,
-              location.id,
+              item.repId,
               location.departmentId,
               assetCategoryId,
               siri,
-              item.nama,
-              item.kuantiti,
+              item.key,
               julat.mula,
               julat.tamat,
               statusId,
@@ -536,7 +555,7 @@ export const schedulesRoute = new Hono<AppEnv>()
           decision: 'PERMIT',
           policyId: 'POL_INSPECTION_TASK_ASSIGNMENT',
           resourceId: ids[0],
-          notes: `${arasList.length} jadual aras (${arasList.map((item) => item.nama).join(', ')}) bagi ${location.nama} didaftarkan (Siri ${siri}) — tarikh lalai ${julat.label}.`,
+          notes: `${plan.length} jadual aras (${plan.map((item) => item.nama).join(', ')}) didaftarkan (Siri ${siri}) — tarikh lalai ${julat.label}.`,
         });
 
         const saved = await Promise.all(ids.map((scheduleId) => findScheduleRow(c.env.DB, scheduleId)));
@@ -544,7 +563,7 @@ export const schedulesRoute = new Hono<AppEnv>()
         return c.json(
           {
             success: true,
-            message: `${arasList.length} jadual aras bagi ${location.nama} berjaya didaftarkan.`,
+            message: `${plan.length} jadual aras berjaya didaftarkan.`,
             data: saved.filter((row): row is ScheduleRow => Boolean(row)).map(mapSchedule),
           },
           201
@@ -870,11 +889,8 @@ export const schedulesRoute = new Hono<AppEnv>()
         const report = body.laporanPraJkpak;
 
         // Bilangan aset ruang (KEW.PA-7) menentukan "Sedang Digunakan" (A) sebagai baki.
-        // Jadual aras asrama menggunakan bahagian aras itu sahaja.
-        const assetCount = await c.env.DB.prepare(
-          `SELECT COALESCE(s.kuantiti_aras, (SELECT COUNT(*) FROM assets WHERE location_id = s.location_id)) AS total
-             FROM inspection_schedules s WHERE s.id = ?`
-        )
+        // Jadual aras asrama menjumlahkan aset semua bilik dalam aras itu (v_schedules_full.kuantiti).
+        const assetCount = await c.env.DB.prepare('SELECT kuantiti AS total FROM v_schedules_full WHERE id = ?')
           .bind(id)
           .first<{ total: number }>();
 

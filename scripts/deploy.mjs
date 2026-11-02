@@ -115,6 +115,16 @@ if (!frontendOnly) {
         'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-11-02-schedule-aras.sql'
       );
     }
+    const locationColumns = run(
+      'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --json --command "PRAGMA table_info(locations)"',
+      { capture: true }
+    );
+    if (!/"name"\s*:\s*"kumpulan_aras"/.test(locationColumns)) {
+      console.log('\u25b8 Migrasi: kumpulan aras bilik asrama\u2026');
+      run(
+        'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/migrations/2026-11-02-location-kumpulan-aras.sql'
+      );
+    }
     console.log('▶ Migrasi skema D1 (remote)…');
     run(
       'npx wrangler d1 execute poliku-aset-d1 --remote --config backend/wrangler.jsonc --file=backend/schema.sql'
