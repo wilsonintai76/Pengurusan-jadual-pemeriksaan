@@ -32,15 +32,14 @@ interface DirektoriLokasiMapViewProps {
 const POLIKU_DEFAULT_LAT = 1.621425;
 const POLIKU_DEFAULT_LNG = 110.323580;
 
-const CAMPUS_ZONES = [
-  { name: 'Keseluruhan Kampus', lat: POLIKU_DEFAULT_LAT, lng: POLIKU_DEFAULT_LNG, zoom: 17 },
-  { name: 'Blok E (JTMK)', lat: 1.621810, lng: 110.324100, zoom: 19 },
-  { name: 'Kompleks JKM', lat: 1.621425, lng: 110.323580, zoom: 19 },
-  { name: 'Blok C (JKE)', lat: 1.621050, lng: 110.322900, zoom: 19 },
-  { name: 'Blok B (JKA)', lat: 1.620800, lng: 110.324500, zoom: 19 },
-  { name: 'Pentadbiran & UAP', lat: 1.622500, lng: 110.323000, zoom: 19 },
-  { name: 'Perpustakaan (PSA)', lat: 1.622350, lng: 110.324400, zoom: 19 },
-];
+/** Zon fokus terbitan data: satu cip per bangunan/blok berdaftar (KEW.PA-7). */
+interface ZonBangunan {
+  nama: string;
+  lat: number;
+  lng: number;
+  zoom: number;
+  bilangan: number;
+}
 
 // Haversine formula to compute distance in meters between two lat/lng points
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -87,6 +86,54 @@ export default function DirektoriLokasiMapView({
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(highlightLocationId || null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  /**
+   * Zon fokus dijana daripada lokasi sebenar: satu cip "Semua Lokasi" + satu cip
+   * setiap bangunan/blok yang mempunyai koordinat. Tiada lagi senarai zon berkod keras
+   * yang tidak sepadan dengan bangunan dalam data KEW.PA-7.
+   */
+  const zonFokus = useMemo<ZonBangunan[]>(() => {
+    const kumpulan = new Map<string, { lat: number; lng: number; bilangan: number }>();
+
+    locations.forEach((lokasi) => {
+      const nama = (lokasi.bangunan || '').trim();
+      const lat = Number(lokasi.latitude);
+      const lng = Number(lokasi.longitude);
+      if (!nama || nama === '-' || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      if (lat === 0 && lng === 0) return;
+
+      const sedia = kumpulan.get(nama) ?? { lat: 0, lng: 0, bilangan: 0 };
+      kumpulan.set(nama, {
+        lat: sedia.lat + lat,
+        lng: sedia.lng + lng,
+        bilangan: sedia.bilangan + 1,
+      });
+    });
+
+    const bangunan: ZonBangunan[] = Array.from(kumpulan.entries())
+      .map(([nama, nilai]) => ({
+        nama,
+        lat: nilai.lat / nilai.bilangan,
+        lng: nilai.lng / nilai.bilangan,
+        zoom: 18,
+        bilangan: nilai.bilangan,
+      }))
+      .sort((a, b) => a.nama.localeCompare(b.nama));
+
+    const semuaLat = bangunan.reduce((jumlah, item) => jumlah + item.lat, 0);
+    const semuaLng = bangunan.reduce((jumlah, item) => jumlah + item.lng, 0);
+
+    return [
+      {
+        nama: 'Semua Lokasi',
+        lat: bangunan.length ? semuaLat / bangunan.length : POLIKU_DEFAULT_LAT,
+        lng: bangunan.length ? semuaLng / bangunan.length : POLIKU_DEFAULT_LNG,
+        zoom: 16,
+        bilangan: locations.length,
+      },
+      ...bangunan,
+    ];
+  }, [locations]);
 
   // Sorted locations with distances if user coordinates exist
   const locationsWithDistance = useMemo(() => {
@@ -457,8 +504,8 @@ export default function DirektoriLokasiMapView({
     }
   };
 
-  // Fly to campus preset zone
-  const handleSelectZone = (zone: (typeof CAMPUS_ZONES)[0]) => {
+  // Fly to a derived building zone
+  const handleSelectZone = (zone: ZonBangunan) => {
     if (!mapInstanceRef.current) return;
     mapInstanceRef.current.flyTo([zone.lat, zone.lng], zone.zoom, {
       animate: true,
@@ -595,14 +642,22 @@ export default function DirektoriLokasiMapView({
       {/* Campus Zone Quick Jump Bar */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex items-center gap-1.5 overflow-x-auto text-[11px] text-slate-300">
         <span className="font-bold text-slate-400 shrink-0 text-[10px] uppercase font-mono mr-1">Fokus Zon:</span>
-        {CAMPUS_ZONES.map((zone, idx) => (
+        {zonFokus.map((zone, idx) => (
           <button
-            key={idx}
+            key={zone.nama}
             type="button"
             onClick={() => handleSelectZone(zone)}
+            title={
+              idx === 0
+                ? 'Tunjuk semua lokasi berdaftar'
+                : `${zone.bilangan} lokasi dalam ${zone.nama}`
+            }
             className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-amber-400 hover:text-slate-950 font-medium text-slate-200 border border-slate-700/60 transition whitespace-nowrap cursor-pointer shrink-0"
           >
-            {zone.name}
+            {zone.nama}
+            {idx > 0 && (
+              <span className="ml-1 font-mono text-[10px] text-amber-300">({zone.bilangan})</span>
+            )}
           </button>
         ))}
       </div>

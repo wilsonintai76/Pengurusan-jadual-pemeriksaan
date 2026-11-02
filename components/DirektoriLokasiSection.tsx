@@ -701,7 +701,7 @@ export default function DirektoriLokasiSection({
               }`}
             >
               <TableIcon className="w-3.5 h-3.5 text-slate-600" />
-              <span>Senarai Jadual ({filteredLocations.length})</span>
+              <span>Senarai Lokasi ({filteredLocations.length})</span>
             </button>
             <button
               type="button"
