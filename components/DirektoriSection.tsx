@@ -1188,7 +1188,6 @@ export default function DirektoriSection({
                                       }`}
                                     >
                                       + {roleShort(r.roleId)}
-                                      {r.scopeType === 'LOCATION' && r.scopeId ? ` ${r.scopeId}` : ''}
                                       {(() => {
                                         const hari = hariKeTamat(r.validTo);
                                         return hari !== null && hari >= 0 && hari <= HARI_AMARAN_LUPUT
