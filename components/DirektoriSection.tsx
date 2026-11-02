@@ -1075,7 +1075,7 @@ export default function DirektoriSection({
                   <option value="name">Nama Pegawai</option>
                   <option value="dept">Jabatan</option>
                   <option value="role">Peranan Utama</option>
-                  <option value="grade">No. Tel Bimbit</option>
+                  <option value="grade">Gred</option>
                 </select>
                 <button
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
@@ -1096,10 +1096,9 @@ export default function DirektoriSection({
                   <tr>
                     <th className="py-3.5 px-3 text-center w-12 text-slate-300 border-b border-slate-800">#</th>
                     <th className="py-3.5 px-4 min-w-[210px] text-slate-100 border-b border-slate-800">Maklumat Pegawai & Emel</th>
-                    <th className="py-3.5 px-4 min-w-[210px] text-slate-100 border-b border-slate-800">Peranan / Jawatan</th>
+                    <th className="py-3.5 px-4 min-w-[210px] text-slate-100 border-b border-slate-800">Peranan</th>
                     <th className="py-3.5 px-3 min-w-[120px] text-slate-100 border-b border-slate-800">Jabatan</th>
                     <th className="py-3.5 px-4 min-w-[190px] text-slate-100 border-b border-slate-800">Skop Tugas / Bilik / Program</th>
-                    <th className="py-3.5 px-3 min-w-[110px] text-slate-100 border-b border-slate-800">No. Tel Bimbit</th>
                     <th className="py-3.5 px-3 text-center min-w-[85px] text-slate-100 border-b border-slate-800">Status</th>
                     <th className="py-3.5 px-4 text-center min-w-[150px] text-slate-100 border-b border-slate-800">Tindakan CRUD</th>
                   </tr>
@@ -1108,7 +1107,7 @@ export default function DirektoriSection({
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400 space-y-2">
+                      <td colSpan={7} className="py-12 text-center text-slate-400 space-y-2">
                         <Users className="w-8 h-8 mx-auto text-slate-300" />
                         <p className="font-semibold text-slate-600">Tiada rekod pegawai dijumpai</p>
                         <p className="text-[11px] text-slate-400">Sila ubah kata kunci carian atau tetapan penapis anda.</p>
@@ -1159,6 +1158,9 @@ export default function DirektoriSection({
                                 <span className="text-[11px] text-slate-500 block font-mono truncate max-w-[200px]">
                                   {user.email}
                                 </span>
+                                <span className="text-[11px] text-slate-600 block font-mono font-semibold">
+                                  {user.phone || '—'}
+                                </span>
                               </div>
                             </div>
                           </td>
@@ -1168,7 +1170,6 @@ export default function DirektoriSection({
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border font-mono ${roleConfig.badge}`}>
                               <BadgeCheck className="w-3.5 h-3.5 shrink-0" />
                               <span>{roleShort(user.role)}</span>
-                              <span className="font-medium opacity-70">{user.role.replace(/\s*\([^)]*\)$/, '')}</span>
                             </span>
                             {(user.roles ?? []).filter((r) => r.roleId !== roleIdOf(user.role)).length > 0 && (
                               <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -1200,16 +1201,11 @@ export default function DirektoriSection({
                             )}
                           </td>
 
-                          {/* 4. Dept & No. Tel Bimbit */}
+                          {/* 4. Jabatan / Unit */}
                           <td className="py-3.5 px-3 whitespace-nowrap">
-                            <div className="flex flex-col items-start gap-1">
-                              <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white font-mono text-[10px] font-bold">
-                                {user.dept}
-                              </span>
-                              <span className="text-slate-600 font-mono text-[11px] font-semibold">
-                                {user.phone || '—'}
-                              </span>
-                            </div>
+                            <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white font-mono text-[10px] font-bold">
+                              {user.dept}
+                            </span>
                           </td>
 
                           {/* 5. Assigned Scope / Rooms */}
@@ -1233,12 +1229,7 @@ export default function DirektoriSection({
                             )}
                           </td>
 
-                          {/* 6. No. Tel Bimbit */}
-                          <td className="py-3.5 px-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">
-                            {user.phone || '—'}
-                          </td>
-
-                          {/* 7. Status */}
+                          {/* 6. Status */}
                           <td className="py-3.5 px-3 text-center whitespace-nowrap">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
                               (user.status || 'Aktif') === 'Aktif'
